@@ -25,6 +25,10 @@ All notable changes to Avatar are documented here. The format follows
   scaling, observability, tool-isolation caveats).
 
 ### Changed
+- **PyPI distribution renamed** `avatar-engine` → **`avatar-runtime`** (`avatar-engine`
+  was already taken on PyPI). Install with `pip install avatar-runtime`. The import
+  package (`import avatar`), the `avatar` CLI, the GitHub repo, and the GHCR image are
+  unchanged — only the published distribution name changed.
 - The dashboard no longer embeds the API key in production HTML — it prompts the
   operator and stores the key in `localStorage` (the key is injected only in dev
   mode).

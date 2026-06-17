@@ -50,7 +50,7 @@ dependency is Postgres. The `runs` table *is* the queue. No Redis, no broker.
 ```bash
 git clone https://github.com/avatar-runtime/avatar-engine.git
 cd avatar-engine
-pip install -e .              # (PyPI: pip install avatar-engine — coming soon)
+pip install -e .              # (PyPI: pip install avatar-runtime — coming soon)
 python -m avatar.cli demo
 ```
 
@@ -320,7 +320,7 @@ roadmap in [docs/AVATAR.md](docs/AVATAR.md).
 
 Changes are tracked in [CHANGELOG.md](CHANGELOG.md); the project follows
 [SemVer](https://semver.org/) and the API is versioned (`/v1`). A PyPI release is
-planned (`pip install avatar-engine`); until then install from source
+planned (`pip install avatar-runtime`); until then install from source
 (`pip install -e .`).
 
 ## Contributing & governance

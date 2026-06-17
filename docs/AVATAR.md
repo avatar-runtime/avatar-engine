@@ -808,7 +808,7 @@ order:
    safe to run.
 6. **Opt-in telemetry** ([§21](#21-measuring-adoption--telemetry--metrics)) so
    adoption and the crash-recovery metric are actually visible.
-7. **Distribution polish:** publish to PyPI (`pip install avatar-engine`), a
+7. **Distribution polish:** publish to PyPI (`pip install avatar-runtime`), a
    <10-minute "build your first durable agent" quickstart, a TypeScript SDK
    mirroring the Python surface, and 1–2 real integrations (Stripe test-mode,
    an email provider) wired into examples.

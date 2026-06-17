@@ -43,7 +43,7 @@
 1. Trademark sanity-check on "Avatar".
 2. Replace `@avatar-runtime/maintainers` in `.github/CODEOWNERS` with real handles.
 3. Turn on secret scanning + push protection; add `gitleaks` to CI.
-4. Configure **PyPI Trusted Publishing** for `avatar-engine` (the `release.yml`
+4. Configure **PyPI Trusted Publishing** for `avatar-runtime` (the `release.yml`
       workflow publishes on tag `v*`).
 5. First push → confirm all CI jobs (lint, SQLite, Postgres, demo, docker) green.
 6. Tag `v0.1.0` to publish to PyPI + GHCR.
