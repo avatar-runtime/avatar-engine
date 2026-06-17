@@ -4,7 +4,7 @@
 > Crash-safe, replayable, idempotent execution for an LLM agent's
 > `plan → tool → observe` loop — with no broker, no scheduler, and no
 > orchestrator. Just Postgres.
->postgres was deliberatly chosen as it gives three of the hardest things for free: durable state(WAL, durability,Crash recovery), Concurrency control, 
+>postgres was deliberatly chosen as it gives three of the hardest things for free: durable state(WAL, durability,Crash recovery), Concurrency control and transactional correctness.
 
 | | |
 |---|---|
