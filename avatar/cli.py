@@ -79,6 +79,11 @@ def run_demo(quick: bool = False) -> int:
     # Fast lease so the resume is quick to watch.
     os.environ.setdefault("AVATAR_LEASE_SECONDS", "2")
     os.environ["AVATAR_APP"] = "avatar.demo"
+    # The demo is a local, throwaway SQLite + default-key scenario, so run in
+    # dev mode — otherwise the startup-safety guard refuses to boot the worker
+    # subprocesses with the default 'dev-key' (check_startup_safety). setdefault
+    # so an operator who exports their own AVATAR_DEV_MODE still wins.
+    os.environ.setdefault("AVATAR_DEV_MODE", "1")
     settings = load_settings()
     load_app()
 
