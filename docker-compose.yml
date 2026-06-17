@@ -1,0 +1,65 @@
+# `docker compose up` → Postgres + control API + dashboard + a worker.
+# One infra dependency: Postgres. The `runs` table is the queue. No broker.
+#
+# This is the LOCAL DEV stack: it runs in AVATAR_DEV_MODE (the default API key
+# `dev-key` is allowed and injected into the dashboard for convenience). For
+# production use docker-compose.prod.yml, which requires a real AVATAR_API_KEY
+# and puts the API behind a TLS reverse proxy. See docs/deployment.md.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: avatar
+      POSTGRES_PASSWORD: avatar
+      POSTGRES_DB: avatar
+    # Host port defaults to 5433 to avoid colliding with another local Postgres.
+    # Internal services still use `postgres:5432` over the compose network, so
+    # this only affects host access.
+    ports: ["${AVATAR_PG_HOST_PORT:-5433}:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U avatar"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: .
+    command: ["python", "-m", "avatar.cli", "migrate"]
+    environment:
+      AVATAR_DATABASE_URL: postgresql+asyncpg://avatar:avatar@postgres:5432/avatar
+      AVATAR_DEV_MODE: "1"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    build: .
+    command: ["avatar", "serve", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      AVATAR_DATABASE_URL: postgresql+asyncpg://avatar:avatar@postgres:5432/avatar
+      AVATAR_API_KEY: ${AVATAR_API_KEY:-dev-key}
+      AVATAR_DEV_MODE: "1"
+      AVATAR_APP: avatar.demo
+    # Host port defaults to 8088 to avoid colliding with a local httpd/Apache
+    # already on 8080. Container still serves on 8080.
+    ports: ["${AVATAR_API_HOST_PORT:-8088}:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  worker:
+    build: .
+    command: ["avatar", "worker"]
+    environment:
+      AVATAR_DATABASE_URL: postgresql+asyncpg://avatar:avatar@postgres:5432/avatar
+      AVATAR_API_KEY: ${AVATAR_API_KEY:-dev-key}
+      AVATAR_DEV_MODE: "1"
+      AVATAR_APP: avatar.demo
+      AVATAR_LEASE_SECONDS: "10"
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    # Scale horizontally: `docker compose up --scale worker=3`.
+
+volumes:
+  pgdata:

@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Avatar — durable execution</title>
+<style>
+  :root {
+    --bg:#0f172a; --panel:#1e293b; --panel2:#172033; --line:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --accent2:#0ea5e9;
+    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { display:flex; align-items:center; gap:16px; padding:14px 22px;
+           border-bottom:1px solid var(--line); background:var(--panel2); position:sticky; top:0; z-index:5;}
+  header .logo { font-weight:700; letter-spacing:.5px; }
+  header .logo span { color:var(--accent); }
+  header nav a { color:var(--muted); text-decoration:none; margin-right:14px; cursor:pointer; }
+  header nav a:hover, header nav a.active { color:var(--text); }
+  .tag { font-size:11px; color:var(--muted); border:1px solid var(--line); padding:2px 8px; border-radius:999px; }
+  main { padding:22px; max-width:1100px; margin:0 auto; }
+  h2 { font-size:16px; margin:0 0 14px; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.4px;}
+  tr.run { cursor:pointer; }
+  tr.run:hover { background:var(--panel); }
+  .id { font-family:var(--mono); font-size:12px; color:var(--accent); }
+  .badge { font-size:11px; padding:2px 9px; border-radius:999px; font-weight:600; }
+  .b-queued{background:#334155;color:#cbd5e1;} .b-leased,.b-running{background:#0c4a6e;color:#7dd3fc;}
+  .b-succeeded{background:#14532d;color:#86efac;} .b-failed,.b-dead{background:#7f1d1d;color:#fca5a5;}
+  .b-approval_wait{background:#78350f;color:#fcd34d;} .b-paused{background:#3b0764;color:#d8b4fe;}
+  .running .badge { animation:pulse 1.4s infinite; }
+  @keyframes pulse { 50% { opacity:.5; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .row { display:flex; gap:24px; flex-wrap:wrap; }
+  .kv { font-size:13px; } .kv b { color:var(--muted); font-weight:600; }
+  button { background:var(--accent2); color:#07212f; border:0; padding:7px 13px; border-radius:7px;
+           font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--muted); }
+  button:hover { filter:brightness(1.08); }
+  .timeline { position:relative; margin-top:8px; }
+  .step { border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px;
+          padding:10px 12px; margin:8px 0; background:var(--panel2); }
+  .step .head { display:flex; align-items:center; gap:10px; cursor:pointer; }
+  .step .seq { font-family:var(--mono); color:var(--muted); }
+  .step .stype { font-weight:600; }
+  .t-plan{border-left-color:#a78bfa;} .t-tool_call{border-left-color:#f59e0b;}
+  .t-observation{border-left-color:#22c55e;} .t-final{border-left-color:#38bdf8;}
+  .t-error{border-left-color:#ef4444;} .t-approval_wait{border-left-color:#fcd34d;}
+  pre { background:#0b1220; border:1px solid var(--line); border-radius:7px; padding:10px;
+        overflow:auto; font-size:12px; color:#cbd5e1; margin:8px 0 0; }
+  .resume { display:flex; align-items:center; gap:8px; color:var(--warn); font-weight:600;
+            margin:14px 0 4px; font-size:13px; }
+  .resume::before { content:"▸"; }
+  .muted { color:var(--muted); }
+  .right { margin-left:auto; }
+  .pill { font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .demo h1 { font-size:22px; } .big { font-size:34px; font-weight:800; }
+  .stat { text-align:center; padding:18px; border:1px solid var(--line); border-radius:10px; min-width:150px;}
+  .stat .n { font-size:30px; font-weight:800; } .stat.ok .n{color:var(--ok);} .stat.bad .n{color:var(--bad);}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Avatar<span>.</span></div>
+  <nav>
+    <a data-route="#/" class="navlink">Runs</a>
+    <a data-route="#/demo" class="navlink">Demo</a>
+    <a data-route="#/health" class="navlink">Health</a>
+  </nav>
+  <span class="tag right">Temporal for AI agents · Postgres-only</span>
+</header>
+<main id="app">loading…</main>
+
+<script>
+// In dev mode the server injects the key here. In production it ships empty,
+// so we ask the operator once and keep it in localStorage — the key is never
+// embedded in the served HTML.
+const INJECTED = "__AVATAR_API_KEY__";
+function resolveKey() {
+  if (INJECTED) return INJECTED;
+  let k = localStorage.getItem("avatar_api_key");
+  while (!k) {
+    k = (window.prompt("Enter your Avatar API key (AVATAR_API_KEY):") || "").trim();
+    if (k) localStorage.setItem("avatar_api_key", k);
+  }
+  return k;
+}
+const API_KEY = resolveKey();
+const H = { "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
+// On 401, forget the stored key so the next load re-prompts.
+function forgetKeyOn401(status) { if (status === 401 && !INJECTED) { localStorage.removeItem("avatar_api_key"); location.reload(); } }
+const app = document.getElementById("app");
+let es = null; // active EventSource-like reader
+
+async function api(path, opts={}) {
+  const r = await fetch(path, { headers:H, ...opts });
+  if (!r.ok) { forgetKeyOn401(r.status); throw new Error(await r.text()); }
+  return r.status === 202 || r.headers.get("content-type")?.includes("json") ? r.json() : null;
+}
+const esc = s => (s??"").toString().replace(/[&<>]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]));
+const badge = s => `<span class="badge b-${s}">${s}</span>`;
+
+function setActive() {
+  document.querySelectorAll(".navlink").forEach(a =>
+    a.classList.toggle("active", a.dataset.route === (location.hash.startsWith("#/runs/")? "":location.hash || "#/")));
+}
+
+async function viewRuns() {
+  const data = await api("/v1/runs?limit=100");
+  const rows = data.runs.map(r => `
+    <tr class="run ${r.status}" onclick="location.hash='#/runs/${r.id}'">
+      <td class="id">${r.id.slice(0,8)}</td>
+      <td>${esc(r.agent_ref)}</td>
+      <td>${badge(r.status)}</td>
+      <td>${r.attempt}</td>
+      <td>${(r.budget_used_cents/100).toFixed(2)}</td>
+      <td class="muted">${new Date(r.created_at).toLocaleString()}</td>
+    </tr>`).join("");
+  app.innerHTML = `<h2>Runs <span class="muted pill">(${data.runs.length})</span></h2>
+    <div class="card"><table>
+      <thead><tr><th>id</th><th>agent</th><th>status</th><th>attempt</th><th>cost ($)</th><th>created</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan=6 class="muted">no runs yet — enqueue one via the SDK or <code>avatar demo</code></td></tr>'}</tbody>
+    </table></div>`;
+}
+
+function stepCard(s) {
+  const p = JSON.stringify(s.payload, null, 2);
+  const idem = s.idempotency_key ? `<span class="pill">idem:${esc(s.idempotency_key).slice(0,16)}…</span>` : "";
+  return `<div class="step t-${s.type}" data-seq="${s.seq}">
+    <div class="head" onclick="this.parentNode.querySelector('pre').classList.toggle('hide');this.parentNode.querySelector('pre').style.display = this.parentNode.querySelector('pre').style.display==='none'?'block':'none';">
+      <span class="seq">#${s.seq}</span>
+      <span class="stype">${s.type}</span>
+      <span class="muted">${esc(s.tool_call_id||"")}</span>
+      ${idem}
+      <span class="right pill">${esc(s.worker_id||"")} · attempt ${s.attempt}</span>
+      <button class="ghost" onclick="event.stopPropagation();forkHere('${s.seq}')">Fork here</button>
+    </div>
+    <pre style="display:none">${esc(p)}</pre>
+  </div>`;
+}
+
+let currentRunId = null;
+async function viewRun(id) {
+  currentRunId = id;
+  const run = await api(`/v1/runs/${id}`);
+  const steps = await api(`/v1/runs/${id}/steps`);
+  renderRun(run, steps);
+  streamRun(id);
+}
+
+function renderRun(run, steps) {
+  let timeline = "", prevAttempt = null;
+  for (const s of steps) {
+    if (prevAttempt !== null && s.attempt !== prevAttempt)
+      timeline += `<div class="resume">resumed by ${esc(s.worker_id||"worker")} (attempt ${s.attempt}) — crash recovery from the ledger</div>`;
+    prevAttempt = s.attempt;
+    timeline += stepCard(s);
+  }
+  const approve = run.status === "approval_wait"
+    ? `<button onclick="decide('approve')">Approve</button>
+       <button class="ghost" onclick="decide('reject')">Reject</button>` : "";
+  const cancel = ["queued","leased","running"].includes(run.status)
+    ? `<button class="ghost" onclick="cancelRun()">Cancel</button>` : "";
+  app.innerHTML = `
+    <a class="muted" onclick="location.hash='#/'" style="cursor:pointer">← all runs</a>
+    <h2 style="margin-top:8px">Run <span class="id">${run.id}</span> ${badge(run.status)}</h2>
+    <div class="card row">
+      <div class="kv"><b>agent</b> ${esc(run.agent_ref)}</div>
+      <div class="kv"><b>attempt</b> ${run.attempt}</div>
+      <div class="kv"><b>cost</b> $${(run.budget_used_cents/100).toFixed(2)}${run.budget_cap_cents?` / $${(run.budget_cap_cents/100).toFixed(2)}`:""}</div>
+      <div class="kv"><b>error</b> ${esc(run.error_class||"—")}</div>
+      ${run.forked_from?`<div class="kv"><b>forked from</b> <span class="id">${run.forked_from.slice(0,8)}</span> @${run.fork_seq}</div>`:""}
+      <div class="right">${approve} ${cancel}</div>
+    </div>
+    ${run.output?`<div class="card"><b class="muted">output</b><pre>${esc(JSON.stringify(run.output,null,2))}</pre></div>`:""}
+    <h2>Step ledger <span class="muted pill">append-only</span></h2>
+    <div class="timeline" id="timeline">${timeline||'<span class="muted">no steps yet</span>'}</div>`;
+}
+
+async function streamRun(id) {
+  if (es) es.abort?.();
+  const ctrl = new AbortController(); es = ctrl;
+  try {
+    const resp = await fetch(`/v1/runs/${id}/stream`, { headers:H, signal:ctrl.signal });
+    const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf="";
+    while (true) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, {stream:true});
+      let i; while ((i = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i+2);
+        if (!line.startsWith("data:")) continue;
+        const ev = JSON.parse(line.slice(5).trim());
+        if (ev.event === "status" && currentRunId === id) { viewRun(id); return; }
+        if (ev.event === "step" && currentRunId === id) { viewRun(id); return; }
+      }
+    }
+  } catch(e) { /* navigated away */ }
+}
+
+async function forkHere(seq) {
+  const res = await api(`/v1/runs/${currentRunId}/replay`, { method:"POST", body:JSON.stringify({from_seq:Number(seq)}) });
+  location.hash = `#/runs/${res.id}`;
+}
+async function decide(kind) { await api(`/v1/runs/${currentRunId}/${kind}`, {method:"POST"}); viewRun(currentRunId); }
+async function cancelRun() { await api(`/v1/runs/${currentRunId}/cancel`, {method:"POST"}); viewRun(currentRunId); }
+
+async function viewDemo() {
+  // Pull recent refund-demo runs so a crash-resumed one (attempt >= 2) is visible.
+  let runs = [];
+  try { runs = (await api("/v1/runs?limit=100")).runs.filter(r => r.agent_ref === "refund-demo"); }
+  catch(e) {}
+  const resumed = runs.find(r => r.attempt >= 2);
+  const rows = runs.slice(0, 8).map(r => `
+    <tr class="run ${r.status}" onclick="location.hash='#/runs/${r.id}'">
+      <td class="id">${r.id.slice(0,8)}</td>
+      <td>${badge(r.status)}</td>
+      <td>${r.attempt}${r.attempt>=2?' <span class="badge b-approval_wait">crash-resumed</span>':''}</td>
+      <td>$${(r.budget_used_cents/100).toFixed(2)}</td>
+      <td class="muted">${new Date(r.created_at).toLocaleString()}</td>
+    </tr>`).join("");
+  app.innerHTML = `<div class="demo">
+    <h1>Crash-safe refund — the killer demo</h1>
+    <p class="muted big">"Crashed mid-refund. Restarted. The refund wasn't issued twice."</p>
+
+    <div class="card">
+      <b>What happens</b>
+      <ol class="muted" style="line-height:1.8">
+        <li>An agent runs <code>lookup_order → issue_refund → email_customer</code>.</li>
+        <li>A worker is killed <b>after <code>issue_refund</code> dispatches</b> but
+            <b>before its observation commits</b> — the decisive crash window (CRASH-C).</li>
+        <li>A fresh worker re-leases the run, rebuilds state from the Postgres ledger,
+            and re-dispatches the refund with the <b>same idempotency key</b>.</li>
+        <li>The downstream dedupes on that key. Net result:
+            <b>tool dispatch attempts may repeat, but tool effects cannot duplicate
+            when idempotency is enforced</b>.</li>
+      </ol>
+    </div>
+
+    <div class="row">
+      <div class="stat"><div class="n">2</div><div class="muted">dispatch attempts (may repeat)</div></div>
+      <div class="stat ok"><div class="n">1</div><div class="muted">tool effect (cannot duplicate)</div></div>
+      <div class="stat"><div class="n">▸</div><div class="muted">resume marker on the timeline</div></div>
+    </div>
+
+    <div class="card">
+      <b>Run it</b>
+      <p class="muted">From a terminal (a real worker process is killed with <code>SIGKILL</code>):</p>
+      <pre>python -m avatar.cli demo</pre>
+      <p class="muted">…then open the resulting run below to see the
+        <span style="color:var(--warn)">▸ resumed after crash</span> divider in the ledger.
+        Or enqueue a plain run here (it won't crash — workers in compose run normally):</p>
+      <button onclick="launchDemo()">Enqueue a refund-demo run</button>
+    </div>
+
+    <h2>Recent refund-demo runs ${resumed?'<span class="badge b-succeeded">a crash-resumed run is present ✓</span>':''}</h2>
+    <div class="card"><table>
+      <thead><tr><th>id</th><th>status</th><th>attempt</th><th>cost</th><th>created</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan=5 class="muted">none yet — run <code>avatar demo</code> or click the button above</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+
+async function launchDemo() {
+  const res = await api("/v1/runs", { method:"POST",
+    body: JSON.stringify({ agent_ref:"refund-demo", input:{order_id:"order-42"}, budget_cap_cents:1000 }) });
+  location.hash = `#/runs/${res.id}`;
+}
+
+async function viewHealth() {
+  const data = await api("/v1/runs?limit=200");
+  const by = {}; data.runs.forEach(r => by[r.status]=(by[r.status]||0)+1);
+  const queued = by.queued||0;
+  app.innerHTML = `<h2>Health</h2>
+    <div class="card row">
+      <div class="kv"><b>total runs</b> ${data.runs.length}</div>
+      <div class="kv"><b>queued</b> ${queued}</div>
+      <div class="kv"><b>running</b> ${(by.running||0)+(by.leased||0)}</div>
+      <div class="kv"><b>succeeded</b> ${by.succeeded||0}</div>
+      <div class="kv"><b>failed/dead</b> ${(by.failed||0)+(by.dead||0)}</div>
+    </div>`;
+}
+
+function route() {
+  setActive();
+  const h = location.hash || "#/";
+  if (h.startsWith("#/runs/")) viewRun(h.slice(7));
+  else if (h === "#/demo") viewDemo();
+  else if (h === "#/health") viewHealth();
+  else viewRuns();
+}
+window.addEventListener("hashchange", route);
+document.querySelectorAll(".navlink").forEach(a => a.onclick = () => location.hash = a.dataset.route);
+route();
+setInterval(() => { if ((location.hash||"#/") === "#/") viewRuns().catch(()=>{}); }, 2500);
+</script>
+</body>
+</html>

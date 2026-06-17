@@ -1,0 +1,29 @@
+# Keep secrets, local state, and dev cruft out of the build context / image.
+.env
+.env.*
+*.db
+*.sqlite
+data/
+storage/
+checkpoints/
+
+# Python / test cruft
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage*
+
+# VCS / tooling / docs not needed at runtime
+.git/
+.github/
+.idea/
+.vscode/
+docs/
+tests/
+
+# README is needed (pyproject readme + image docs); keep it.
+!README.md
+

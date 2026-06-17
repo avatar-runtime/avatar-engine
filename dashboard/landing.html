@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Avatar — a durable execution engine for AI agents</title>
+<meta name="description" content="Temporal for AI agents. Wrap your tool-calling loop and get crash-safety, an append-only step ledger, idempotent tool dispatch, and replay — backed entirely by Postgres." />
+<style>
+  :root {
+    --bg:#0f172a; --panel:#1e293b; --panel2:#172033; --line:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --accent2:#0ea5e9;
+    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code, pre { font-family:var(--mono); }
+  .wrap { max-width:1040px; margin:0 auto; padding:0 22px; }
+
+  header { display:flex; align-items:center; gap:18px; padding:14px 22px;
+           border-bottom:1px solid var(--line); background:var(--panel2);
+           position:sticky; top:0; z-index:10; }
+  header .logo { font-weight:700; letter-spacing:.5px; font-size:17px; }
+  header .logo span { color:var(--accent); }
+  header nav { margin-left:auto; display:flex; gap:18px; align-items:center; }
+  header nav a { color:var(--muted); }
+  header nav a:hover { color:var(--text); text-decoration:none; }
+  .btn { background:var(--accent2); color:#07212f; border:0; padding:8px 15px;
+         border-radius:8px; font-weight:700; cursor:pointer; display:inline-block; }
+  .btn:hover { filter:brightness(1.08); text-decoration:none; }
+  .btn.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
+
+  .hero { padding:70px 0 44px; text-align:center; }
+  .tagline { font-size:12px; letter-spacing:1.5px; text-transform:uppercase;
+             color:var(--accent); font-weight:700; }
+  .hero h1 { font-size:46px; line-height:1.12; margin:14px 0 10px; font-weight:800;
+             letter-spacing:-.5px; }
+  .hero h1 .em { color:var(--accent); }
+  .hero p.sub { font-size:19px; color:var(--muted); max-width:720px; margin:0 auto 26px; }
+  .cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+
+  .guarantee { border:1px solid var(--line); border-left:4px solid var(--accent);
+               background:var(--panel); border-radius:10px; padding:18px 22px;
+               margin:34px auto 0; max-width:780px; }
+  .guarantee b { color:var(--text); }
+  .guarantee .precise { color:var(--muted); font-size:13.5px; margin-top:8px; }
+
+  section { padding:40px 0; border-top:1px solid var(--line); }
+  section h2 { font-size:24px; margin:0 0 8px; font-weight:800; letter-spacing:-.3px; }
+  section .lead { color:var(--muted); max-width:760px; margin:0 0 24px; }
+
+  .proof { display:grid; grid-template-columns:1.05fr .95fr; gap:24px; align-items:start; }
+  .stats { display:flex; gap:14px; margin:18px 0 0; flex-wrap:wrap; }
+  .stat { flex:1; min-width:150px; text-align:center; border:1px solid var(--line);
+          border-radius:10px; padding:18px 12px; background:var(--panel); }
+  .stat .n { font-size:34px; font-weight:800; }
+  .stat.ok .n { color:var(--ok); }
+  .stat .cap { color:var(--muted); font-size:13px; margin-top:4px; }
+
+  pre.code { background:#0b1220; border:1px solid var(--line); border-radius:10px;
+             padding:16px; overflow:auto; font-size:13px; color:#cbd5e1; margin:0; }
+  pre.code .c { color:#64748b; }      /* comment */
+  pre.code .k { color:var(--accent); } /* keyword/symbol */
+  pre.code .s { color:#86efac; }      /* string-ish */
+
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .feat { border:1px solid var(--line); border-radius:10px; padding:16px 18px; background:var(--panel); }
+  .feat h3 { margin:0 0 6px; font-size:15px; }
+  .feat p { margin:0; color:var(--muted); font-size:13.5px; }
+  .feat .ic { color:var(--accent); font-family:var(--mono); font-weight:700; font-size:13px; }
+
+  .flow { background:var(--panel2); border:1px solid var(--line); border-radius:10px;
+          padding:18px; color:#cbd5e1; font-family:var(--mono); font-size:13px;
+          white-space:pre; overflow:auto; }
+
+  .cmp { width:100%; border-collapse:collapse; }
+  .cmp th, .cmp td { text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); font-size:14px; }
+  .cmp th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.4px; }
+  .cmp td.yes { color:var(--ok); } .cmp td.no { color:var(--muted); }
+  .cmp tr.me td { background:var(--panel); }
+  .cmp tr.me td:first-child { font-weight:700; color:var(--text); }
+
+  .steps { counter-reset:s; padding:0; list-style:none; margin:0; }
+  .steps li { counter-increment:s; position:relative; padding:10px 0 10px 42px; color:var(--muted); }
+  .steps li::before { content:counter(s); position:absolute; left:0; top:8px;
+      width:26px; height:26px; border-radius:50%; background:var(--panel); border:1px solid var(--line);
+      color:var(--accent); font-weight:700; display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .steps li b { color:var(--text); }
+
+  .install-tabs { display:flex; gap:8px; margin-bottom:12px; }
+  .install-tabs button { background:transparent; border:1px solid var(--line); color:var(--muted);
+      padding:6px 13px; border-radius:7px; cursor:pointer; font-size:13px; font-weight:600; }
+  .install-tabs button.active { background:var(--panel); color:var(--text); border-color:var(--accent); }
+  .pane { display:none; } .pane.active { display:block; }
+
+  footer { border-top:1px solid var(--line); padding:30px 0; color:var(--muted); font-size:13px; }
+  footer .wrap { display:flex; gap:18px; flex-wrap:wrap; align-items:center; }
+  .scope { color:var(--muted); font-size:13px; max-width:780px; }
+
+  @media (max-width:760px){ .proof,.grid{grid-template-columns:1fr;} .hero h1{font-size:34px;} }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap" style="display:flex;align-items:center;gap:18px;width:100%;padding:0;">
+    <div class="logo">Avatar<span>.</span></div>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/Mwaivictor/Avatar">GitHub</a>
+      <a class="btn ghost" href="/app">Open dashboard →</a>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="wrap">
+    <div class="tagline">Temporal for AI agents</div>
+    <h1>A <span class="em">durable execution engine</span><br/>for AI agents.</h1>
+    <p class="sub">Wrap your existing tool-calling loop and get crash-safety, an append-only
+      step ledger, idempotent tool dispatch, and deterministic replay — backed entirely by
+      Postgres. No broker. No rewrite of your agent.</p>
+    <div class="cta">
+      <a class="btn" href="#install">Install in 2 minutes</a>
+      <a class="btn ghost" href="#proof">See the 30-second proof</a>
+    </div>
+
+    <div class="guarantee">
+      <b>The one guarantee.</b> A worker can die at any point in a run and another resumes
+      from the ledger — no step is lost. <b>Tool dispatch attempts may repeat, but tool
+      effects cannot duplicate when idempotency is enforced.</b>
+      <div class="precise">Stated precisely: at-most-once dispatch from Avatar always;
+        exactly-once end-to-end iff the tool honors the idempotency key. We never claim
+        unconditional exactly-once.</div>
+    </div>
+  </div>
+</div>
+
+<!-- PROOF -->
+<section id="proof">
+  <div class="wrap">
+    <h2>The 30-second proof: a refund that survives a crash</h2>
+    <p class="lead">The agent runs <code>lookup_order → issue_refund → email_customer</code>.
+      A worker is killed <b>after <code>issue_refund</code> dispatches but before its
+      observation commits</b> — the decisive crash window. A fresh worker re-leases the run,
+      rebuilds from the Postgres ledger, and re-dispatches with the <b>same idempotency key</b>.</p>
+    <div class="proof">
+      <pre class="code"><span class="c">---- timeline ----</span>
+  #1  [plan]
+  #2  [tool_call] c1        <span class="c"># lookup_order</span>
+  #3  [observation] c1
+  #4  [plan]
+  #5  [tool_call] c2        <span class="c"># issue_refund</span>
+  <span class="k">▸ resumed by host:6226 (attempt 2)</span>   <span class="c">← crashed here</span>
+  #6  [observation] c2      <span class="c"># re-dispatched, deduped</span>
+  ...
+  #11 [final]
+<span class="c">-------------------</span>
+run status        : <span class="s">succeeded</span>
+dispatch attempts : <span class="k">2</span>   <span class="c"># physically called twice</span>
+tool effects      : <span class="s">1</span>   <span class="c"># one actual refund</span></pre>
+      <div>
+        <div class="stats">
+          <div class="stat"><div class="n">2</div><div class="cap">dispatch attempts<br/>(may repeat)</div></div>
+          <div class="stat ok"><div class="n">1</div><div class="cap">tool effect<br/>(cannot duplicate)</div></div>
+        </div>
+        <p class="lead" style="margin-top:18px">Run it yourself:</p>
+        <pre class="code">python -m avatar.cli demo</pre>
+        <p style="color:var(--muted);font-size:13.5px;margin-top:14px;">
+          A real worker process is killed with <code>SIGKILL</code> — this is not a mock.
+          Then open the <a href="/app">dashboard</a> to see the
+          <span style="color:var(--warn)">▸ resumed after crash</span> divider in the ledger.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY -->
+<section id="why">
+  <div class="wrap">
+    <h2>Why Avatar exists</h2>
+    <p class="lead">LangChain-style frameworks give you the agent loop but no durability —
+      a deploy or a crash mid-run loses state, or double-fires a refund. Temporal gives you
+      durability but no agent / tool / LLM semantics. <b>Avatar is the only thing that is both
+      agent-native and crash-safe</b>, and its only infrastructure dependency is Postgres.</p>
+    <table class="cmp">
+      <thead><tr><th>&nbsp;</th><th>Crash-safe</th><th>Idempotent tools</th><th>Replay</th><th>Agent-native</th><th>Infra</th></tr></thead>
+      <tbody>
+        <tr><td>LangChain / Agents SDK</td><td class="no">no</td><td class="no">no</td><td class="no">no</td><td class="yes">yes</td><td class="no">—</td></tr>
+        <tr><td>Temporal / Restate</td><td class="yes">yes</td><td class="no">DIY</td><td class="yes">yes</td><td class="no">no</td><td class="no">cluster</td></tr>
+        <tr><td>Cloud queues (SQS/Celery)</td><td class="no">at-least-once</td><td class="no">DIY</td><td class="no">no</td><td class="no">no</td><td class="no">broker</td></tr>
+        <tr class="me"><td>Avatar</td><td class="yes">yes</td><td class="yes">yes</td><td class="yes">yes</td><td class="yes">yes</td><td class="yes">Postgres</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- HOW -->
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="lead">The engine is a state machine over two Postgres tables. The
+      <code>runs</code> table <b>is</b> the queue; <code>run_steps</code> is an append-only
+      ledger. All run state is a pure fold over that ledger — which is what makes crash-resume
+      and replay deterministic.</p>
+    <div class="flow">  SDK ──enqueue──▶  Postgres ( runs = queue + state · run_steps = append-only ledger )
+                            │  FOR UPDATE SKIP LOCKED — lease + heartbeat
+                            ▼
+                       Worker ──▶  plan → tool_call → observe → commit → repeat
+                            │            (policy check · idempotency key · subprocess tool)
+  Dashboard ◀──REST + SSE───┘</div>
+    <ol class="steps" style="margin-top:22px">
+      <li><b>Enqueue</b> a run — it's a row in <code>runs</code>, status <code>queued</code>.</li>
+      <li>A <b>worker leases</b> it atomically (<code>FOR UPDATE SKIP LOCKED</code>) and heartbeats the lease — exactly one owner.</li>
+      <li>Each loop: <b>commit a <code>tool_call</code> intent</b>, dispatch the tool with its idempotency key, then <b>commit the <code>observation</code></b>.</li>
+      <li>On crash, the lease expires; another worker <b>rebuilds state from the ledger</b> and continues from the last committed step.</li>
+      <li>An already-observed call <b>short-circuits</b> to its recorded result; a dispatched-but-unobserved call is <b>re-dispatched with the same key</b>.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="wrap">
+    <h2>What you get</h2>
+    <div class="grid">
+      <div class="feat"><div class="ic">[ ]</div><h3>Crash-safe</h3><p>Lease + heartbeat + ledger replay. Kill <code>-9</code> any worker; another resumes.</p></div>
+      <div class="feat"><div class="ic">{ }</div><h3>Idempotent tools</h3><p>A crash-stable key per tool call, enforced by <code>UNIQUE(run_id, key)</code>.</p></div>
+      <div class="feat"><div class="ic">⌥</div><h3>Append-only ledger</h3><p>Every plan / tool_call / observation step is committed before the next. Full audit, free.</p></div>
+      <div class="feat"><div class="ic">↺</div><h3>Replay &amp; fork</h3><p>Re-run a trace prefix from any step without re-calling the model or re-running tools.</p></div>
+      <div class="feat"><div class="ic">✓</div><h3>Policy hook</h3><p><code>allow</code> / <code>deny</code> / <code>require_approval</code> evaluated before every tool dispatch.</p></div>
+      <div class="feat"><div class="ic">$</div><h3>Budget hard-stop</h3><p>Per-run <code>budget_cap_cents</code>; the run halts atomically before it breaches.</p></div>
+      <div class="feat"><div class="ic">≡</div><h3>Control API + SSE</h3><p>REST with a single static key and a live step stream. The dashboard is just a client.</p></div>
+      <div class="feat"><div class="ic">▸</div><h3>Dashboard</h3><p>Runs list, step-ledger timeline, live SSE, visible crash-resume markers, fork-here.</p></div>
+      <div class="feat"><div class="ic">◆</div><h3>Postgres-only</h3><p>One infra dependency. The <code>runs</code> table is the queue. No Redis, no broker.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="lead">Two ways in. The whole stack — Postgres, control API, dashboard, and a
+      worker — comes up with one command.</p>
+    <div class="install-tabs">
+      <button class="active" data-pane="docker">docker compose</button>
+      <button data-pane="pip">pip</button>
+      <button data-pane="sdk">use from Python</button>
+    </div>
+
+    <div class="pane active" id="pane-docker">
+      <pre class="code"><span class="c"># Postgres + control API + dashboard + 1 worker</span>
+docker compose up
+
+<span class="c"># scale workers horizontally</span>
+docker compose up --scale worker=3</pre>
+      <p style="color:var(--muted);font-size:13.5px;margin-top:12px;">
+        Then open <a href="/app">the dashboard</a> (host port <code>8088</code> in this
+        environment), enqueue a run, and watch its live step timeline. Host ports are
+        overridable via <code>AVATAR_API_HOST_PORT</code> / <code>AVATAR_PG_HOST_PORT</code>.</p>
+    </div>
+
+    <div class="pane" id="pane-pip">
+      <pre class="code"><span class="c"># from the repo root</span>
+pip install -e .
+
+<span class="c"># the crash-resume proof (kills a real worker)</span>
+python -m avatar.cli demo
+
+<span class="c"># run the API + dashboard, and a worker</span>
+avatar serve
+avatar worker          <span class="c"># scale by running more</span></pre>
+    </div>
+
+    <div class="pane" id="pane-sdk">
+      <pre class="code"><span class="k">from</span> avatar <span class="k">import</span> Avatar, tool, Plan, ToolCall
+
+app = Avatar(api_url=<span class="s">"http://localhost:8088"</span>, api_key=<span class="s">"dev-key"</span>)
+
+<span class="k">@tool</span>(timeout=10, retries=2)
+<span class="k">def</span> issue_refund(order_id, cents):
+    <span class="c"># Your real side effect. Forward current_idempotency_key()</span>
+    <span class="c"># to the downstream for exactly-once end-to-end.</span>
+    <span class="k">return</span> {<span class="s">"refunded"</span>: True}
+
+<span class="k">@app.agent</span>(<span class="s">"support-resolver"</span>)
+<span class="k">def</span> resolve(state):
+    <span class="k">if</span> any(m[<span class="s">"role"</span>] == <span class="s">"tool"</span> <span class="k">for</span> m <span class="k">in</span> state.messages):
+        <span class="k">return</span> Plan(final=True, output={<span class="s">"status"</span>: <span class="s">"done"</span>})
+    <span class="k">return</span> Plan(tool_calls=[ToolCall(id=<span class="s">"c1"</span>, name=<span class="s">"issue_refund"</span>,
+                                     arguments={<span class="s">"order_id"</span>: <span class="s">"42"</span>, <span class="s">"cents"</span>: 500})])
+
+run = app.runs.create(agent_ref=<span class="s">"support-resolver"</span>, input={<span class="s">"ticket_id"</span>: 42})
+print(app.runs.wait(run[<span class="s">"id"</span>]))</pre>
+      <p style="color:var(--muted);font-size:13.5px;margin-top:12px;">
+        Point the worker at your module with <code>AVATAR_APP=yourpkg.agents</code>. The engine
+        drives the durable loop; you write only the model call and the tools.</p>
+    </div>
+  </div>
+</section>
+
+<!-- WHO -->
+<section id="who">
+  <div class="wrap">
+    <h2>Who it's for</h2>
+    <p class="lead">Backend engineers whose AI agents touch <b>real, stateful, money-or-data-changing
+      systems</b> — issuing refunds, provisioning accounts, updating CRM/billing, writing to ledgers —
+      and who have already been burned by an in-memory loop losing state or double-firing a side effect
+      on a deploy or crash. If your agent only chats, you don't need Avatar. If it <i>acts</i>, you do.</p>
+  </div>
+</section>
+
+<!-- SCOPE -->
+<section id="scope">
+  <div class="wrap">
+    <h2>Scope</h2>
+    <p class="scope">This is <b>single-purpose infrastructure</b>, not a platform. It is
+      <b>not</b> a SaaS, not multi-tenant, not a marketplace, not BYOK, not voice/avatars,
+      not multi-agent orchestration. Those are sequenced behind the wedge — a hosted Avatar
+      Cloud, governance, and a multi-agent fabric — built in the order that actually ships.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="logo" style="font-weight:700">Avatar<span style="color:var(--accent)">.</span></div>
+    <span>A durable execution engine for AI agents.</span>
+    <span style="margin-left:auto">
+      <a href="/app">Dashboard</a> &nbsp;·&nbsp;
+      <a href="/docs">API</a> &nbsp;·&nbsp;
+      <a href="https://github.com/Mwaivictor/Avatar">GitHub</a> &nbsp;·&nbsp;
+      <a href="#install">Install</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll(".install-tabs button").forEach(b => b.onclick = () => {
+    document.querySelectorAll(".install-tabs button").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".pane").forEach(p => p.classList.remove("active"));
+    b.classList.add("active");
+    document.getElementById("pane-" + b.dataset.pane).classList.add("active");
+  });
+</script>
+</body>
+</html>

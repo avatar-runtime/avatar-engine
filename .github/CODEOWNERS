@@ -1,0 +1,7 @@
+# Default owners for everything in this repo.
+# Replace with the real maintainer handles/team before going public.
+*                           @avatar-runtime/maintainers
+
+# Engine core changes deserve extra scrutiny.
+/avatar/engine/             @avatar-runtime/maintainers
+/avatar/api/                @avatar-runtime/maintainers

@@ -1,0 +1,19 @@
+# Avatar production reverse proxy.
+#
+# Caddy obtains and renews TLS automatically for $AVATAR_DOMAIN (Let's Encrypt).
+# It exposes the API publicly but gates the human/operator surfaces — the
+# dashboard (/app) and /metrics — behind HTTP basic-auth, so a leaked or
+# guessed URL can't drive the control plane from a browser. The /v1 API itself
+# is still protected by the AVATAR_API_KEY bearer token at the app layer.
+
+{$AVATAR_DOMAIN} {
+	encode gzip
+
+	# Operator surfaces: basic-auth in front of the bearer-token API.
+	@protected path /app /app/* /metrics
+	basicauth @protected {
+		{$CADDY_BASICAUTH_USER} {$CADDY_BASICAUTH_HASH}
+	}
+
+	reverse_proxy api:8080
+}

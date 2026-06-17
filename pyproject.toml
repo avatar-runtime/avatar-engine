@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "avatar-engine"
+version = "0.1.0"
+description = "Temporal for AI agents — a Postgres-native durable execution engine for AI agent workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Avatar Runtime Authors" }]
+keywords = ["durable-execution", "ai-agents", "workflow", "postgres", "idempotency", "crash-recovery"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: System :: Distributed Computing",
+]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "sqlalchemy[asyncio]>=2.0",
+    "pydantic>=2.6",
+    "httpx>=0.27",
+    "aiosqlite>=0.19",
+]
+
+[project.urls]
+Homepage = "https://github.com/avatar-runtime/avatar-engine"
+Repository = "https://github.com/avatar-runtime/avatar-engine"
+Documentation = "https://github.com/avatar-runtime/avatar-engine/blob/main/docs/AVATAR.md"
+Issues = "https://github.com/avatar-runtime/avatar-engine/issues"
+
+[project.optional-dependencies]
+postgres = ["asyncpg>=0.29", "psycopg[binary]>=3.1"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "anyio>=4", "ruff>=0.6"]
+
+[project.scripts]
+avatar = "avatar.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["avatar*"]
+
+[tool.setuptools.package-data]
+"avatar.engine" = ["schema.sql"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008"]  # E501: long lines tolerated; B008: FastAPI Depends() in defaults

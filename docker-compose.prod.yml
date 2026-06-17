@@ -1,0 +1,96 @@
+# Production stack: Caddy (automatic TLS) → API + Worker → Postgres.
+#
+# Hardening vs. docker-compose.yml:
+#   * NOT in dev mode — a real AVATAR_API_KEY is REQUIRED or the API/worker
+#     refuse to boot (see avatar/config.check_startup_safety).
+#   * Postgres is NOT published to the host — only the compose network reaches it.
+#   * The API is NOT published either; only Caddy is exposed (80/443), terminating
+#     TLS and putting the dashboard (/app) and metrics behind basic-auth.
+#
+# Quick start:
+#   cp .env.prod.example .env        # then edit: set AVATAR_API_KEY, POSTGRES_PASSWORD,
+#                                     #   AVATAR_DOMAIN, and CADDY_BASICAUTH_HASH
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml up -d --scale worker=3
+#
+# See docs/deployment.md for backups, scaling, and the security checklist.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-avatar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-avatar}
+    # No host port: the database is reachable only on the internal network.
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-avatar}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: .
+    # Apply the reviewed canonical DDL (schema.sql) once, idempotently.
+    command: ["python", "-m", "avatar.cli", "migrate"]
+    environment:
+      AVATAR_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-avatar}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-avatar}
+      AVATAR_API_KEY: ${AVATAR_API_KEY:?set AVATAR_API_KEY in .env}
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    build: .
+    command: ["avatar", "serve", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      AVATAR_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-avatar}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-avatar}
+      AVATAR_API_KEY: ${AVATAR_API_KEY:?set AVATAR_API_KEY in .env}
+      AVATAR_APP: ${AVATAR_APP:-}
+      AVATAR_RATE_LIMIT_PER_SECOND: ${AVATAR_RATE_LIMIT_PER_SECOND:-50}
+      AVATAR_MAX_QUEUE_DEPTH: ${AVATAR_MAX_QUEUE_DEPTH:-10000}
+      AVATAR_DB_POOL_SIZE: ${AVATAR_DB_POOL_SIZE:-10}
+      AVATAR_DB_MAX_OVERFLOW: ${AVATAR_DB_MAX_OVERFLOW:-20}
+    # No host port — reached only via Caddy.
+    expose: ["8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["avatar", "worker"]
+    environment:
+      AVATAR_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-avatar}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-avatar}
+      AVATAR_API_KEY: ${AVATAR_API_KEY:?set AVATAR_API_KEY in .env}
+      AVATAR_APP: ${AVATAR_APP:-}
+      AVATAR_DB_POOL_SIZE: ${AVATAR_DB_POOL_SIZE:-5}
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+    # Scale horizontally: `docker compose -f docker-compose.prod.yml up -d --scale worker=3`.
+
+  caddy:
+    image: caddy:2-alpine
+    ports: ["80:80", "443:443"]
+    environment:
+      AVATAR_DOMAIN: ${AVATAR_DOMAIN:?set AVATAR_DOMAIN in .env}
+      # bcrypt hash from `caddy hash-password` — gates /app and /metrics.
+      CADDY_BASICAUTH_USER: ${CADDY_BASICAUTH_USER:-admin}
+      CADDY_BASICAUTH_HASH: ${CADDY_BASICAUTH_HASH:?run `docker run caddy:2-alpine caddy hash-password -plaintext '<pw>'`}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_started }
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
