@@ -36,6 +36,9 @@ dependency is Postgres. The `runs` table *is* the queue. No Redis, no broker.
 
 ## Documentation
 
+- **[Getting Started](docs/getting-started.md)** — end-to-end onboarding: install,
+  build your first durable agent, or bind Avatar to an agent loop you already have.
+  Start here if you want to *use* it.
 - **[The Complete Guide](docs/AVATAR.md)** — the comprehensive doc: mental model,
   architecture, execution semantics, the concurrency model as theorems, the
   failure taxonomy, the Guarantees Spec, positioning, adoption metrics, what's
@@ -48,11 +51,11 @@ dependency is Postgres. The `runs` table *is* the queue. No Redis, no broker.
 ## The 30-second proof: a refund that survives a crash
 
 ```bash
-git clone https://github.com/avatar-runtime/avatar-engine.git
-cd avatar-engine
-pip install -e .              # (PyPI: pip install avatar-runtime — coming soon)
-python -m avatar.cli demo
+pip install avatar-runtime
+avatar demo                   # crash a worker mid-refund; another resumes — exactly once
 ```
+
+> Prefer the source? `git clone https://github.com/avatar-runtime/avatar-engine.git && cd avatar-engine && pip install -e .`, then `avatar demo`.
 
 The demo runs `lookup_order → issue_refund → email_customer`. A worker is killed
 **after `issue_refund` dispatches but before its observation commits** (the
@@ -319,9 +322,8 @@ roadmap in [docs/AVATAR.md](docs/AVATAR.md).
 ## Versioning & releases
 
 Changes are tracked in [CHANGELOG.md](CHANGELOG.md); the project follows
-[SemVer](https://semver.org/) and the API is versioned (`/v1`). A PyPI release is
-planned (`pip install avatar-runtime`); until then install from source
-(`pip install -e .`).
+[SemVer](https://semver.org/) and the API is versioned (`/v1`). Released on PyPI as
+[`avatar-runtime`](https://pypi.org/project/avatar-runtime/) — `pip install avatar-runtime`.
 
 ## Contributing & governance
 
