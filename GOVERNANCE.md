@@ -2,7 +2,7 @@
 
 Avatar Engine is **company-led open source**, stewarded by the Avatar Runtime
 Authors. It is the open-source foundation of the commercial **Avatar Cloud**
-offering (the Temporal model: an open engine + a hosted control plane).
+offering (an open engine + a hosted control plane).
 
 ## Principles
 
