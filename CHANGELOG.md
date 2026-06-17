@@ -36,6 +36,12 @@ All notable changes to Avatar are documented here. The format follows
 - **`schema.sql` was missing the `approvals` table** — a production deploy from the
   canonical DDL would have broken the human-in-the-loop approval flow. Added, and
   now guarded by the drift test.
+- **Postgres CI test errors** (`got Future attached to a different loop` /
+  `Event loop is closed`) — the test engine fixture was session-scoped while
+  pytest-asyncio gives each test its own event loop, so the pooled asyncpg
+  connection (created on the session loop) was reused on a per-test loop. The
+  engine fixture is now function-scoped so every connection stays on one loop.
+  (Only the Postgres path was affected; aiosqlite tolerates cross-loop reuse.)
 
 ## [0.1.0] — initial wedge
 - Durable execution engine: lease-based worker, append-only step ledger,

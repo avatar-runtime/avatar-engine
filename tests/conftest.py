@@ -43,8 +43,15 @@ def settings():
     return load_settings()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def _engine():
+    # Function-scoped on purpose: pytest-asyncio gives each test its own event
+    # loop, and asyncpg connections (Postgres CI) are pinned to the loop that
+    # created them. A session-scoped engine would pool a connection born on the
+    # session loop and then reuse it on a per-test loop -> "Future attached to a
+    # different loop" / "Event loop is closed". Creating the engine inside the
+    # test's loop keeps every connection on a single loop. (aiosqlite tolerates
+    # cross-loop reuse, which is why this only bit the Postgres path in CI.)
     eng = create_engine(os.environ["AVATAR_DATABASE_URL"])
     await init_db(eng)
     yield eng
