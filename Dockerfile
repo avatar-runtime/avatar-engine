@@ -13,7 +13,6 @@ COPY requirements.txt pyproject.toml README.md LICENSE NOTICE ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY avatar ./avatar
-COPY dashboard ./dashboard
 RUN pip install --no-cache-dir -e .
 
 EXPOSE 8080

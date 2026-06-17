@@ -4,6 +4,7 @@
 > Crash-safe, replayable, idempotent execution for an LLM agent's
 > `plan → tool → observe` loop — with no broker, no scheduler, and no
 > orchestrator. Just Postgres.
+>postgres was deliberatly chosen as it gives three of the hardest things for free: durable state(WAL, durability,Crash recovery), Concurrency control, 
 
 | | |
 |---|---|
@@ -166,7 +167,7 @@ cluster.
   REST surface, the SSE stream, rate limiting, `/metrics` and `/v1/stats`.
 - **SDK** (`avatar/sdk/`) — `@agent` / `@tool` decorators (authoring) plus a
   REST/SSE client (`runs.create/get/list/wait/stream/replay/...`).
-- **Dashboard** (`dashboard/`) — a single-page client of the API: runs list, the
+- **Dashboard** (`avatar/dashboard/`) — a single-page client of the API: runs list, the
   step-ledger timeline with visible crash-resume markers, live SSE, fork/replay.
 - **CLI** (`avatar/cli.py`) — `avatar serve | worker | migrate | demo`.
 
@@ -919,7 +920,7 @@ avatar/
   demo.py           # the killer-demo agent + idempotent refund tool
   cli.py            # avatar serve | worker | migrate | demo
   config.py         # env-only Settings + check_startup_safety
-dashboard/          # single-page dashboard (index.html) + landing.html
+  dashboard/        # single-page dashboard (index.html) + landing.html — packaged in the wheel
 docs/
   AVATAR.md         # this document
   deployment.md     # production guide

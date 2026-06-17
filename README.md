@@ -293,7 +293,7 @@ avatar/
   demo.py        the killer-demo agent + idempotent refund tool
   cli.py         avatar worker | serve | demo
   config.py      env-only settings
-dashboard/       single-page dashboard (served at /)
+  dashboard/     single-page dashboard + landing page (served at /app and /, packaged in the wheel)
 tests/           engine, crash-resume (CRASH-C), idempotency, replay, policy/budget, API
 ```
 

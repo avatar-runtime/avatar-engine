@@ -18,7 +18,9 @@ from avatar.api.ratelimit import TokenBucket
 from avatar.config import Settings, check_startup_safety, load_settings
 from avatar.engine.db import create_engine, create_session_factory, init_db
 
-_DASHBOARD_DIR = Path(__file__).resolve().parent.parent.parent / "dashboard"
+# Ships inside the package (avatar/dashboard/) so it is present on a `pip
+# install` as well as in the Docker image — not just in a source checkout.
+_DASHBOARD_DIR = Path(__file__).resolve().parent.parent / "dashboard"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
