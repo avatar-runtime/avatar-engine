@@ -1,0 +1,317 @@
+/* ============================================================================
+   Avatar Runtime — Design System
+   "A living Postgres execution graph."
+   Infrastructure-first. No gradients. Accent only for state/interaction.
+   Shared by the landing page (/) and the developer dashboard (/app).
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* ---- Color system (STRICT) -------------------------------------------- */
+  --ink:    #0B0E1A;   /* background — ink navy            */
+  --slate:  #151A2E;   /* cards                            */
+  --line:   #262C49;   /* borders                          */
+  --accent: #2DD4A7;   /* signal mint — state/interaction  */
+  --paper:  #EDEFF7;   /* text                             */
+  --muted:  #8A93AD;   /* captions                         */
+
+  /* Derived, restrained tints — never decorative, only for state. */
+  --slate-2:   #10142420;
+  --slate-hi:  #1B2138;            /* raised surface            */
+  --accent-dim: rgba(45, 212, 167, .14);
+  --accent-ln:  rgba(45, 212, 167, .42);
+  --crash:    #F0506A;             /* failure state (used sparingly) */
+  --crash-dim: rgba(240, 80, 106, .14);
+  --crash-ln:  rgba(240, 80, 106, .45);
+  --warn:     #E5B567;             /* approval / paused         */
+
+  /* ---- Type ------------------------------------------------------------- */
+  --font-display: 'Space Grotesk', 'Sora', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- Geometry --------------------------------------------------------- */
+  --radius:   12px;
+  --radius-sm: 8px;
+  --bevel:    3px;
+  --ease:     cubic-bezier(.22, 1, .36, 1);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* A faint structural grid — the "lattice" the whole system lives on. */
+body.grid-bg {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  background-position: center top;
+  position: relative;
+}
+body.grid-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, transparent 0%, var(--ink) 78%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+  margin: 0;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, pre, .mono { font-family: var(--font-mono); }
+
+::selection { background: var(--accent-dim); color: var(--paper); }
+
+/* ---- Layout helpers ----------------------------------------------------- */
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 1; }
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: inline-flex; align-items: center; gap: 9px;
+}
+.eyebrow::before {
+  content: ""; width: 7px; height: 7px; background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  transform: rotate(45deg);
+}
+.muted { color: var(--muted); }
+.accent { color: var(--accent); }
+
+/* ============================================================================
+   BUTTONS
+   ========================================================================== */
+.btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 11px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #06231B;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 9px;
+  transition: transform .15s var(--ease), box-shadow .2s var(--ease), background .2s;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 8px 24px -8px var(--accent-ln); }
+.btn:active { transform: translateY(0); }
+.btn.ghost { background: transparent; color: var(--paper); border-color: var(--line); }
+.btn.ghost:hover { border-color: var(--accent-ln); background: var(--accent-dim); box-shadow: none; }
+.btn.sm { padding: 7px 13px; font-size: 13px; }
+
+/* ============================================================================
+   CARDS / PANELS
+   ========================================================================== */
+.card {
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px;
+  position: relative;
+}
+.card.hover { transition: border-color .2s var(--ease), transform .2s var(--ease); }
+.card.hover:hover { border-color: var(--accent-ln); transform: translateY(-2px); }
+
+/* ============================================================================
+   THE NODE/EDGE/STATE COMPONENT SYSTEM
+   Runs = nodes · Steps = edges · States = visual treatments
+   A "node" is a beveled volumetric cube rendered with layered borders.
+   ========================================================================== */
+.node {
+  --nc: var(--line);          /* node accent color, overridden per state */
+  position: relative;
+  width: 64px; height: 64px;
+  border-radius: 10px;
+  background: var(--slate-hi);
+  border: 1px solid var(--nc);
+  display: grid; place-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--paper);
+  /* Bevel: inner top highlight + bottom shade gives volume without gradient. */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.06),
+    inset 0 -3px 0 rgba(0,0,0,.35);
+}
+.node .face {
+  position: absolute; inset: 6px;
+  border: 1px solid var(--nc);
+  border-radius: 6px;
+  opacity: .35;
+}
+.node .glyph { position: relative; z-index: 1; }
+
+/* ---- States ------------------------------------------------------------- */
+.node.is-active  { --nc: var(--accent); animation: pulse-cube 1.8s var(--ease) infinite; }
+.node.is-sealed  { --nc: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.06), inset 0 -3px 0 rgba(0,0,0,.35), 0 0 0 1px var(--accent-dim), 0 0 22px -6px var(--accent-ln); }
+.node.is-sealed .glyph { color: var(--accent); }
+.node.is-crashed { --nc: var(--crash); }
+.node.is-crashed .glyph { color: var(--crash); }
+.node.is-crashed::after {           /* fracture line across the cube */
+  content: ""; position: absolute; inset: 0; border-radius: 10px;
+  background:
+    linear-gradient(115deg, transparent 46%, var(--crash) 47%, var(--crash) 48%, transparent 49%),
+    linear-gradient(72deg, transparent 58%, var(--crash) 59%, transparent 60%);
+  opacity: .8; mix-blend-mode: screen;
+}
+.node.is-fork {
+  --nc: var(--accent);
+  clip-path: polygon(0 0, 100% 0, 100% 60%, 60% 100%, 0 100%);
+}
+
+/* ---- Edges -------------------------------------------------------------- */
+.edge {
+  height: 2px; flex: 1; min-width: 22px;
+  background: var(--line);
+  position: relative;
+}
+.edge.live { background: var(--accent-ln); }
+.edge.live::after {
+  content: ""; position: absolute; top: -2px; left: 0;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 9px var(--accent);
+  animation: edge-travel 1.6s linear infinite;
+}
+.edge.crashed { background: var(--crash-ln); border-top: 1px dashed var(--crash); height: 0; }
+
+/* ---- Step type colors (ledger) ------------------------------------------ */
+.t-plan        { --nc: #9C8CF0; }
+.t-tool_call   { --nc: var(--warn); }
+.t-observation { --nc: var(--accent); }
+.t-final       { --nc: var(--accent); }
+.t-error       { --nc: var(--crash); }
+.t-approval_wait { --nc: var(--warn); }
+
+/* ============================================================================
+   BADGES (run status)
+   ========================================================================== */
+.badge {
+  font-family: var(--font-mono);
+  font-size: 11px; font-weight: 500;
+  padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.b-queued   { color: var(--muted); }
+.b-leased,
+.b-running  { color: var(--accent); border-color: var(--accent-ln); }
+.b-running::before { animation: pulse-dot 1.2s infinite; }
+.b-succeeded{ color: var(--accent); border-color: var(--accent-ln); background: var(--accent-dim); }
+.b-failed,
+.b-dead     { color: var(--crash); border-color: var(--crash-ln); }
+.b-approval_wait { color: var(--warn); border-color: rgba(229,181,103,.4); }
+.b-paused   { color: #B89CF0; }
+
+/* ============================================================================
+   MOTION SYSTEM
+   commit pulse · lease glow · crash flicker · replay sweep · fork split
+   ========================================================================== */
+@keyframes pulse-cube {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,.06), inset 0 -3px 0 rgba(0,0,0,.35), 0 0 0 0 var(--accent-dim); }
+  50%      { box-shadow: inset 0 1px 0 rgba(255,255,255,.06), inset 0 -3px 0 rgba(0,0,0,.35), 0 0 0 6px transparent, 0 0 26px -4px var(--accent-ln); }
+}
+@keyframes pulse-dot { 50% { opacity: .35; } }
+
+/* commit pulse — a ledger write ripples outward */
+@keyframes commit-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--accent-ln); }
+  70%  { box-shadow: 0 0 0 12px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.commit-pulse { animation: commit-pulse .9s var(--ease); }
+
+/* lease glow — worker takes ownership */
+@keyframes lease-glow {
+  0%, 100% { border-color: var(--accent); }
+  50%      { border-color: var(--accent-ln); }
+}
+
+/* crash flicker — failure interruption */
+@keyframes crash-flicker {
+  0%, 100% { opacity: 1; }
+  20% { opacity: .25; } 25% { opacity: 1; }
+  45% { opacity: .15; } 50% { opacity: 1; }
+  70% { opacity: .4; }
+}
+.crash-flicker { animation: crash-flicker .5s steps(1) 1; }
+
+/* replay sweep — deterministic reconstruction */
+@keyframes replay-sweep {
+  from { transform: translateX(-110%); }
+  to   { transform: translateX(110%); }
+}
+
+/* fork split — branching timeline duplication */
+@keyframes fork-split {
+  from { transform: translateY(0) scale(1); opacity: 0; }
+  to   { transform: translateY(-12px) scale(1); opacity: 1; }
+}
+
+/* edge particle travel */
+@keyframes edge-travel { from { left: 0; } to { left: 100%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+  html { scroll-behavior: auto; }
+}
+
+/* ============================================================================
+   SCROLLBARS (subtle, infrastructural)
+   ========================================================================== */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; border: 3px solid var(--ink); }
+::-webkit-scrollbar-thumb:hover { background: #303755; }
+
+/* ============================================================================
+   CODE / LEDGER BLOCKS
+   ========================================================================== */
+pre.code, .codeblock {
+  background: #080B14;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 18px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: #C2C9DD;
+  margin: 0;
+}
+.tok-comment { color: #566080; font-style: italic; }
+.tok-key     { color: var(--accent); }
+.tok-str     { color: #8FE3C4; }
+.tok-num     { color: var(--warn); }
+.tok-fn      { color: #C2C9DD; }

@@ -47,7 +47,7 @@ include = ["avatar*"]
 
 [tool.setuptools.package-data]
 "avatar.engine" = ["schema.sql"]
-"avatar" = ["dashboard/*.html"]
+"avatar" = ["dashboard/*.html", "dashboard/*.css", "dashboard/*.js"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

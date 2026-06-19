@@ -3,350 +3,457 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Avatar — a durable execution engine for AI agents</title>
-<meta name="description" content="Temporal for AI agents. Wrap your tool-calling loop and get crash-safety, an append-only step ledger, idempotent tool dispatch, and replay — backed entirely by Postgres." />
+<title>Avatar Runtime — durable execution for AI agents, built on Postgres</title>
+<meta name="description" content="A Postgres-native durable execution engine for LLM tool loops. Crash-safe execution, idempotent tools, deterministic replay, append-only ledger. No brokers. No queues. Just a ledger in Postgres." />
+<link rel="stylesheet" href="/static/avatar.css" />
 <style>
-  :root {
-    --bg:#0f172a; --panel:#1e293b; --panel2:#172033; --line:#334155;
-    --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --accent2:#0ea5e9;
-    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444;
-    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* ===================== Landing-page-specific layout ===================== */
+  header.nav {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; gap: 22px;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(11, 14, 26, .82);
+    backdrop-filter: blur(12px);
   }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text);
-         font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  a { color:var(--accent); text-decoration:none; }
-  a:hover { text-decoration:underline; }
-  code, pre { font-family:var(--mono); }
-  .wrap { max-width:1040px; margin:0 auto; padding:0 22px; }
+  header.nav .brand { display: flex; align-items: center; gap: 11px; font-family: var(--font-display); font-weight: 700; font-size: 16px; letter-spacing: -.01em; }
+  header.nav .brand .sub { color: var(--muted); font-weight: 400; font-size: 12px; font-family: var(--font-mono); letter-spacing: .04em; }
+  header.nav .links { margin-left: auto; display: flex; gap: 22px; align-items: center; }
+  header.nav .links a:not(.btn) { color: var(--muted); font-size: 14px; }
+  header.nav .links a:not(.btn):hover { color: var(--paper); text-decoration: none; }
+  @media (max-width: 880px){ header.nav .links a:not(.btn){ display:none; } }
 
-  header { display:flex; align-items:center; gap:18px; padding:14px 22px;
-           border-bottom:1px solid var(--line); background:var(--panel2);
-           position:sticky; top:0; z-index:10; }
-  header .logo { font-weight:700; letter-spacing:.5px; font-size:17px; }
-  header .logo span { color:var(--accent); }
-  header nav { margin-left:auto; display:flex; gap:18px; align-items:center; }
-  header nav a { color:var(--muted); }
-  header nav a:hover { color:var(--text); text-decoration:none; }
-  .btn { background:var(--accent2); color:#07212f; border:0; padding:8px 15px;
-         border-radius:8px; font-weight:700; cursor:pointer; display:inline-block; }
-  .btn:hover { filter:brightness(1.08); text-decoration:none; }
-  .btn.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
+  section { padding: 96px 0; border-top: 1px solid var(--line); position: relative; }
+  section:first-of-type { border-top: 0; }
+  .sec-head { max-width: 720px; margin-bottom: 48px; }
+  .sec-head h2 { font-size: clamp(26px, 3.4vw, 38px); margin: 16px 0 12px; }
+  .sec-head p { color: var(--muted); font-size: 17px; margin: 0; }
 
-  .hero { padding:70px 0 44px; text-align:center; }
-  .tagline { font-size:12px; letter-spacing:1.5px; text-transform:uppercase;
-             color:var(--accent); font-weight:700; }
-  .hero h1 { font-size:46px; line-height:1.12; margin:14px 0 10px; font-weight:800;
-             letter-spacing:-.5px; }
-  .hero h1 .em { color:var(--accent); }
-  .hero p.sub { font-size:19px; color:var(--muted); max-width:720px; margin:0 auto 26px; }
-  .cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  /* ---- HERO ---- */
+  .hero { padding: 64px 0 88px; border-top: 0; }
+  .hero .wrap { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; }
+  .hero h1 { font-size: clamp(34px, 4.4vw, 56px); line-height: 1.04; margin: 22px 0 0; }
+  .hero h1 .hl { color: var(--accent); }
+  .hero .sub { font-size: 19px; color: var(--muted); margin: 22px 0 0; max-width: 560px; }
+  .hero .cta { display: flex; gap: 12px; margin-top: 32px; flex-wrap: wrap; }
+  .hero .trust { display: flex; gap: 22px; margin-top: 34px; flex-wrap: wrap; color: var(--muted); font-family: var(--font-mono); font-size: 12.5px; }
+  .hero .trust span { display: flex; align-items: center; gap: 8px; }
+  .hero .trust span::before { content: ""; width: 6px; height: 6px; background: var(--accent); transform: rotate(45deg); }
+  @media (max-width: 940px){ .hero .wrap { grid-template-columns: 1fr; } .hero-stage { order: -1; } }
 
-  .guarantee { border:1px solid var(--line); border-left:4px solid var(--accent);
-               background:var(--panel); border-radius:10px; padding:18px 22px;
-               margin:34px auto 0; max-width:780px; }
-  .guarantee b { color:var(--text); }
-  .guarantee .precise { color:var(--muted); font-size:13.5px; margin-top:8px; }
+  /* ---- Hero stage (animated tetra-node cluster) ---- */
+  .hero-stage {
+    aspect-ratio: 1 / 1; width: 100%; max-width: 460px; margin-left: auto;
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background:
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 38px 38px,
+      linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 38px 38px,
+      var(--slate);
+    position: relative; overflow: hidden;
+  }
+  .hero-stage::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 70% 60% at 50% 45%, transparent 30%, var(--slate) 92%); pointer-events: none; }
+  .stage-phase {
+    position: absolute; left: 16px; bottom: 14px; z-index: 4;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .stage-phase b { color: var(--accent); }
+  .stage-dots { position: absolute; right: 16px; bottom: 14px; z-index: 4; display: flex; gap: 6px; }
+  .stage-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); transition: background .3s; }
+  .stage-dots i.on { background: var(--accent); }
 
-  section { padding:40px 0; border-top:1px solid var(--line); }
-  section h2 { font-size:24px; margin:0 0 8px; font-weight:800; letter-spacing:-.3px; }
-  section .lead { color:var(--muted); max-width:760px; margin:0 0 24px; }
+  /* ---- generic two-column ---- */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center; }
+  @media (max-width: 880px){ .split { grid-template-columns: 1fr; } }
 
-  .proof { display:grid; grid-template-columns:1.05fr .95fr; gap:24px; align-items:start; }
-  .stats { display:flex; gap:14px; margin:18px 0 0; flex-wrap:wrap; }
-  .stat { flex:1; min-width:150px; text-align:center; border:1px solid var(--line);
-          border-radius:10px; padding:18px 12px; background:var(--panel); }
-  .stat .n { font-size:34px; font-weight:800; }
-  .stat.ok .n { color:var(--ok); }
-  .stat .cap { color:var(--muted); font-size:13px; margin-top:4px; }
+  /* ---- Problem timeline ---- */
+  .timeline-broken, .timeline-fixed { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+  .tl-node { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .tl-node .cap { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .contrast-row { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .contrast-row .card .label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+  .contrast-row .bad .label { color: var(--crash); }
+  .contrast-row .good .label { color: var(--accent); }
 
-  pre.code { background:#0b1220; border:1px solid var(--line); border-radius:10px;
-             padding:16px; overflow:auto; font-size:13px; color:#cbd5e1; margin:0; }
-  pre.code .c { color:#64748b; }      /* comment */
-  pre.code .k { color:var(--accent); } /* keyword/symbol */
-  pre.code .s { color:#86efac; }      /* string-ish */
+  /* ---- Core idea statement ---- */
+  .statement { font-family: var(--font-display); font-size: clamp(22px, 3vw, 32px); line-height: 1.3; max-width: 880px; }
+  .statement .hl { color: var(--accent); }
+  .pipeline { font-family: var(--font-mono); font-size: 13px; color: var(--muted); white-space: pre; overflow-x: auto; background: #080B14; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 18px; line-height: 1.7; }
+  .pipeline b { color: var(--accent); }
 
-  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
-  .feat { border:1px solid var(--line); border-radius:10px; padding:16px 18px; background:var(--panel); }
-  .feat h3 { margin:0 0 6px; font-size:15px; }
-  .feat p { margin:0; color:var(--muted); font-size:13.5px; }
-  .feat .ic { color:var(--accent); font-family:var(--mono); font-weight:700; font-size:13px; }
+  /* ---- Architecture stack ---- */
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .layer {
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--slate); padding: 20px 22px;
+    display: grid; grid-template-columns: 44px 1fr auto; gap: 18px; align-items: center;
+    transition: border-color .2s var(--ease), transform .2s var(--ease);
+    cursor: default;
+  }
+  .layer:hover { border-color: var(--accent-ln); transform: translateX(4px); }
+  .layer .ix { font-family: var(--font-mono); color: var(--accent); font-size: 13px; }
+  .layer h3 { font-size: 17px; }
+  .layer p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  .layer .reveal { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-align: right; opacity: .6; transition: opacity .2s; }
+  .layer:hover .reveal { opacity: 1; color: var(--accent); }
+  .stack-edge { width: 1px; height: 14px; background: var(--accent-ln); margin: 0 auto; }
 
-  .flow { background:var(--panel2); border:1px solid var(--line); border-radius:10px;
-          padding:18px; color:#cbd5e1; font-family:var(--mono); font-size:13px;
-          white-space:pre; overflow:auto; }
+  /* ---- Crash demo ---- */
+  .crash-demo { border: 1px solid var(--line); border-radius: var(--radius); background: var(--slate); overflow: hidden; }
+  .crash-stage { position: relative; padding: 36px 28px; min-height: 220px; display: flex; align-items: center; justify-content: center; gap: 8px; background:
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 40px 40px,
+      var(--ink); }
+  .crash-bar { display: flex; align-items: center; gap: 16px; padding: 16px 22px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .crash-caption { font-family: var(--font-mono); font-size: 13px; color: var(--muted); min-width: 260px; flex: 1; }
+  .crash-caption b { color: var(--paper); }
+  .crash-result { display: flex; gap: 14px; }
+  .crash-result .stat { text-align: center; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 16px; min-width: 96px; }
+  .crash-result .stat .n { font-family: var(--font-display); font-size: 28px; font-weight: 700; }
+  .crash-result .stat.ok .n { color: var(--accent); }
+  .crash-result .stat.warn .n { color: var(--warn); }
+  .crash-result .stat .c { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
-  .cmp { width:100%; border-collapse:collapse; }
-  .cmp th, .cmp td { text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); font-size:14px; }
-  .cmp th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.4px; }
-  .cmp td.yes { color:var(--ok); } .cmp td.no { color:var(--muted); }
-  .cmp tr.me td { background:var(--panel); }
-  .cmp tr.me td:first-child { font-weight:700; color:var(--text); }
+  /* ---- Guarantees graph ---- */
+  .guarantees { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+  .g-node { border: 1px solid var(--line); border-radius: var(--radius); background: var(--slate); padding: 20px; position: relative; transition: border-color .2s var(--ease); }
+  .g-node:hover { border-color: var(--accent-ln); }
+  .g-node .gtitle { display: flex; align-items: center; gap: 11px; font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+  .g-node .proof { margin-top: 14px; max-height: 0; overflow: hidden; opacity: 0; transition: max-height .35s var(--ease), opacity .25s; }
+  .g-node:hover .proof, .g-node:focus-within .proof { max-height: 220px; opacity: 1; }
+  .g-node .proof pre { margin: 0; font-size: 11.5px; }
+  .g-node .hint { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); margin-top: 10px; }
+  .g-node:hover .hint { display: none; }
 
-  .steps { counter-reset:s; padding:0; list-style:none; margin:0; }
-  .steps li { counter-increment:s; position:relative; padding:10px 0 10px 42px; color:var(--muted); }
-  .steps li::before { content:counter(s); position:absolute; left:0; top:8px;
-      width:26px; height:26px; border-radius:50%; background:var(--panel); border:1px solid var(--line);
-      color:var(--accent); font-weight:700; display:flex; align-items:center; justify-content:center; font-size:13px; }
-  .steps li b { color:var(--text); }
+  /* ---- DX split ---- */
+  .dx-code { background: #080B14; border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; font-family: var(--font-mono); font-size: 13px; line-height: 1.75; overflow-x: auto; }
+  .dx-graph { border: 1px solid var(--line); border-radius: var(--radius); background:
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 36px 36px,
+      linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 36px 36px,
+      var(--slate); padding: 24px; position: relative; min-height: 300px; }
+  .dx-graph .glabel { position: absolute; top: 14px; left: 18px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
 
-  .install-tabs { display:flex; gap:8px; margin-bottom:12px; }
-  .install-tabs button { background:transparent; border:1px solid var(--line); color:var(--muted);
-      padding:6px 13px; border-radius:7px; cursor:pointer; font-size:13px; font-weight:600; }
-  .install-tabs button.active { background:var(--panel); color:var(--text); border-color:var(--accent); }
-  .pane { display:none; } .pane.active { display:block; }
+  /* ---- Crash slider / replay scrubber ---- */
+  .scrubber-wrap { border: 1px solid var(--line); border-radius: var(--radius); background: var(--slate); padding: 26px; }
+  .scrub-track { display: flex; align-items: center; gap: 4px; margin: 8px 0 20px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; }
+  .scrub-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  input[type=range].crash-slider {
+    -webkit-appearance: none; appearance: none; height: 4px; border-radius: 999px;
+    background: var(--line); flex: 1; min-width: 200px; outline: none;
+  }
+  input[type=range].crash-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; box-shadow: 0 0 0 4px var(--accent-dim);
+  }
+  input[type=range].crash-slider::-moz-range-thumb {
+    width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--accent); cursor: pointer;
+  }
+  .scrub-readout { font-family: var(--font-mono); font-size: 12px; color: var(--muted); min-width: 220px; }
+  .scrub-readout b { color: var(--accent); }
 
-  footer { border-top:1px solid var(--line); padding:30px 0; color:var(--muted); font-size:13px; }
-  footer .wrap { display:flex; gap:18px; flex-wrap:wrap; align-items:center; }
-  .scope { color:var(--muted); font-size:13px; max-width:780px; }
+  /* ---- Dashboard preview ---- */
+  .dash-preview { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--slate); }
+  .dash-preview .chrome { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--ink); }
+  .dash-preview .chrome i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: inline-block; }
+  .dash-preview .chrome .url { margin-left: 10px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .dash-grid { display: grid; grid-template-columns: 150px 1fr 220px; min-height: 320px; }
+  .dash-grid .side { border-right: 1px solid var(--line); padding: 14px; }
+  .dash-grid .side a { display: block; font-size: 13px; color: var(--muted); padding: 7px 9px; border-radius: 6px; }
+  .dash-grid .side a.on { color: var(--accent); background: var(--accent-dim); }
+  .dash-grid .main { padding: 18px; position: relative; background:
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 34px 34px,
+      linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 34px 34px,
+      var(--slate); }
+  .dash-grid .insp { border-left: 1px solid var(--line); padding: 16px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+  .dash-grid .insp .k { color: var(--accent); }
+  @media (max-width: 760px){ .dash-grid { grid-template-columns: 1fr; } .dash-grid .side, .dash-grid .insp { display: none; } }
 
-  @media (max-width:760px){ .proof,.grid{grid-template-columns:1fr;} .hero h1{font-size:34px;} }
+  /* ---- CTA band ---- */
+  .cta-band { text-align: center; }
+  .cta-band h2 { font-size: clamp(28px, 4vw, 44px); }
+  .cta-band .sub { color: var(--muted); font-size: 18px; margin: 14px auto 0; max-width: 560px; }
+
+  footer { border-top: 1px solid var(--line); padding: 40px 0; }
+  footer .wrap { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+  footer .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; color: var(--paper); }
+  footer .flinks { margin-left: auto; display: flex; gap: 18px; }
+
+  .pill-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  .pill { font-family: var(--font-mono); font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; }
+  .pill .accent { color: var(--accent); }
 </style>
 </head>
-<body>
-<header>
-  <div class="wrap" style="display:flex;align-items:center;gap:18px;width:100%;padding:0;">
-    <div class="logo">Avatar<span>.</span></div>
-    <nav>
-      <a href="#how">How it works</a>
-      <a href="#features">Features</a>
-      <a href="#install">Install</a>
-      <a href="https://github.com/Mwaivictor/Avatar">GitHub</a>
-      <a class="btn ghost" href="/app">Open dashboard →</a>
-    </nav>
+<body class="grid-bg">
+
+<!-- ============================ NAV ============================ -->
+<header class="nav">
+  <div class="brand">
+    <svg class="logo-lattice" width="26" height="26" viewBox="0 0 32 32" fill="none" aria-label="Avatar Runtime"></svg>
+    Avatar Runtime
+    <span class="sub">durable execution</span>
+  </div>
+  <div class="links">
+    <a href="#problem">Problem</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#crash">Crash safety</a>
+    <a href="#dx">SDK</a>
+    <a href="https://github.com/Mwaivictor/Avatar">GitHub</a>
+    <a class="btn ghost sm" href="/app">Open dashboard →</a>
   </div>
 </header>
 
-<!-- HERO -->
-<div class="hero">
+<!-- ============================ HERO ============================ -->
+<section class="hero">
   <div class="wrap">
-    <div class="tagline">Temporal for AI agents</div>
-    <h1>A <span class="em">durable execution engine</span><br/>for AI agents.</h1>
-    <p class="sub">Wrap your existing tool-calling loop and get crash-safety, an append-only
-      step ledger, idempotent tool dispatch, and deterministic replay — backed entirely by
-      Postgres. No broker. No rewrite of your agent.</p>
-    <div class="cta">
-      <a class="btn" href="#install">Install in 2 minutes</a>
-      <a class="btn ghost" href="#proof">See the 30-second proof</a>
+    <div>
+      <span class="eyebrow">Postgres-native durable execution</span>
+      <h1>Avatar makes AI agent execution <span class="hl">crash-safe, replayable, and idempotent</span> — using only Postgres.</h1>
+      <p class="sub">A durable execution runtime for LLM tool loops. No brokers. No queues. No orchestrators. Just a ledger in Postgres.</p>
+      <div class="cta">
+        <a class="btn" href="#crash">▸ Run crash demo</a>
+        <a class="btn ghost" href="#architecture">View architecture</a>
+        <a class="btn ghost" href="https://github.com/Mwaivictor/Avatar">GitHub</a>
+      </div>
+      <div class="trust">
+        <span>append-only ledger</span>
+        <span>lease + heartbeat recovery</span>
+        <span>deterministic replay</span>
+        <span>one dependency: Postgres</span>
+      </div>
     </div>
 
-    <div class="guarantee">
-      <b>The one guarantee.</b> A worker can die at any point in a run and another resumes
-      from the ledger — no step is lost. <b>Tool dispatch attempts may repeat, but tool
-      effects cannot duplicate when idempotency is enforced.</b>
-      <div class="precise">Stated precisely: at-most-once dispatch from Avatar always;
-        exactly-once end-to-end iff the tool honors the idempotency key. We never claim
-        unconditional exactly-once.</div>
+    <!-- Animated tetra-node cluster: cluster → graph → Postgres → replay -->
+    <div class="hero-stage" id="heroStage" data-phase="0">
+      <svg id="heroSvg" viewBox="0 0 400 400" width="100%" height="100%" style="position:absolute;inset:0;"></svg>
+      <div class="stage-phase">phase · <b id="phaseLabel">cube cluster</b></div>
+      <div class="stage-dots" id="stageDots"><i class="on"></i><i></i><i></i><i></i></div>
     </div>
   </div>
-</div>
+</section>
 
-<!-- PROOF -->
-<section id="proof">
+<!-- ===================== SECTION 1 — PROBLEM ===================== -->
+<section id="problem">
   <div class="wrap">
-    <h2>The 30-second proof: a refund that survives a crash</h2>
-    <p class="lead">The agent runs <code>lookup_order → issue_refund → email_customer</code>.
-      A worker is killed <b>after <code>issue_refund</code> dispatches but before its
-      observation commits</b> — the decisive crash window. A fresh worker re-leases the run,
-      rebuilds from the Postgres ledger, and re-dispatches with the <b>same idempotency key</b>.</p>
-    <div class="proof">
-      <pre class="code"><span class="c">---- timeline ----</span>
-  #1  [plan]
-  #2  [tool_call] c1        <span class="c"># lookup_order</span>
-  #3  [observation] c1
-  #4  [plan]
-  #5  [tool_call] c2        <span class="c"># issue_refund</span>
-  <span class="k">▸ resumed by host:6226 (attempt 2)</span>   <span class="c">← crashed here</span>
-  #6  [observation] c2      <span class="c"># re-dispatched, deduped</span>
-  ...
-  #11 [final]
-<span class="c">-------------------</span>
-run status        : <span class="s">succeeded</span>
-dispatch attempts : <span class="k">2</span>   <span class="c"># physically called twice</span>
-tool effects      : <span class="s">1</span>   <span class="c"># one actual refund</span></pre>
+    <div class="sec-head">
+      <span class="eyebrow">The problem</span>
+      <h2>AI agents are stateless in a stateful world.</h2>
+      <p>An in-memory tool loop has no recovery guarantees. A deploy or a crash mid-tool loses the execution, double-fires the refund, and leaves no history to inspect.</p>
+    </div>
+    <div class="split">
       <div>
-        <div class="stats">
-          <div class="stat"><div class="n">2</div><div class="cap">dispatch attempts<br/>(may repeat)</div></div>
-          <div class="stat ok"><div class="n">1</div><div class="cap">tool effect<br/>(cannot duplicate)</div></div>
+        <div class="card" style="background:var(--ink);">
+          <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--crash);margin-bottom:18px;">in-memory loop · crash mid-tool</div>
+          <div class="timeline-broken" id="brokenTl"></div>
+          <ul style="margin:22px 0 0;padding-left:18px;color:var(--muted);font-size:14px;line-height:1.9;">
+            <li><b style="color:var(--paper)">No recovery guarantees</b> — process dies, run is gone.</li>
+            <li><b style="color:var(--paper)">Duplicated side effects</b> — the refund fires twice on retry.</li>
+            <li><b style="color:var(--paper)">Invisible history</b> — no record of what executed, or when.</li>
+          </ul>
         </div>
-        <p class="lead" style="margin-top:18px">Run it yourself:</p>
-        <pre class="code">python -m avatar.cli demo</pre>
-        <p style="color:var(--muted);font-size:13.5px;margin-top:14px;">
-          A real worker process is killed with <code>SIGKILL</code> — this is not a mock.
-          Then open the <a href="/app">dashboard</a> to see the
-          <span style="color:var(--warn)">▸ resumed after crash</span> divider in the ledger.</p>
+      </div>
+      <div>
+        <div class="card" style="border-color:var(--accent-ln);">
+          <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:18px;">Avatar ledger · deterministic reconstruction</div>
+          <div class="timeline-fixed" id="fixedTl"></div>
+          <ul style="margin:22px 0 0;padding-left:18px;color:var(--muted);font-size:14px;line-height:1.9;">
+            <li><b style="color:var(--paper)">Resume from the ledger</b> — another worker continues, no loss.</li>
+            <li><b style="color:var(--paper)">Idempotent dispatch</b> — re-dispatched with the same key, deduped.</li>
+            <li><b style="color:var(--paper)">Full audit, free</b> — every step is an immutable row.</li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- WHY -->
-<section id="why">
+<!-- ===================== SECTION 2 — CORE IDEA ===================== -->
+<section id="core">
   <div class="wrap">
-    <h2>Why Avatar exists</h2>
-    <p class="lead">LangChain-style frameworks give you the agent loop but no durability —
-      a deploy or a crash mid-run loses state, or double-fires a refund. Temporal gives you
-      durability but no agent / tool / LLM semantics. <b>Avatar is the only thing that is both
-      agent-native and crash-safe</b>, and its only infrastructure dependency is Postgres.</p>
-    <table class="cmp">
-      <thead><tr><th>&nbsp;</th><th>Crash-safe</th><th>Idempotent tools</th><th>Replay</th><th>Agent-native</th><th>Infra</th></tr></thead>
-      <tbody>
-        <tr><td>LangChain / Agents SDK</td><td class="no">no</td><td class="no">no</td><td class="no">no</td><td class="yes">yes</td><td class="no">—</td></tr>
-        <tr><td>Temporal / Restate</td><td class="yes">yes</td><td class="no">DIY</td><td class="yes">yes</td><td class="no">no</td><td class="no">cluster</td></tr>
-        <tr><td>Cloud queues (SQS/Celery)</td><td class="no">at-least-once</td><td class="no">DIY</td><td class="no">no</td><td class="no">no</td><td class="no">broker</td></tr>
-        <tr class="me"><td>Avatar</td><td class="yes">yes</td><td class="yes">yes</td><td class="yes">yes</td><td class="yes">yes</td><td class="yes">Postgres</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
+    <div class="sec-head">
+      <span class="eyebrow">The core idea</span>
+      <h2>Everything is a ledger. Nothing lives in memory.</h2>
+    </div>
+    <div class="statement">The queue is a <span class="hl">table</span>. The state is a <span class="hl">log</span>. The system is <span class="hl">Postgres</span>.</div>
+    <div style="margin-top:36px;">
+      <div class="pipeline">  agent loop  ──▶  <b>run</b> (row in <b>runs</b>)  ──▶  <b>steps</b> (append-only <b>run_steps</b>)
 
-<!-- HOW -->
-<section id="how">
-  <div class="wrap">
-    <h2>How it works</h2>
-    <p class="lead">The engine is a state machine over two Postgres tables. The
-      <code>runs</code> table <b>is</b> the queue; <code>run_steps</code> is an append-only
-      ledger. All run state is a pure fold over that ledger — which is what makes crash-resume
-      and replay deterministic.</p>
-    <div class="flow">  SDK ──enqueue──▶  Postgres ( runs = queue + state · run_steps = append-only ledger )
-                            │  FOR UPDATE SKIP LOCKED — lease + heartbeat
-                            ▼
-                       Worker ──▶  plan → tool_call → observe → commit → repeat
-                            │            (policy check · idempotency key · subprocess tool)
-  Dashboard ◀──REST + SSE───┘</div>
-    <ol class="steps" style="margin-top:22px">
-      <li><b>Enqueue</b> a run — it's a row in <code>runs</code>, status <code>queued</code>.</li>
-      <li>A <b>worker leases</b> it atomically (<code>FOR UPDATE SKIP LOCKED</code>) and heartbeats the lease — exactly one owner.</li>
-      <li>Each loop: <b>commit a <code>tool_call</code> intent</b>, dispatch the tool with its idempotency key, then <b>commit the <code>observation</code></b>.</li>
-      <li>On crash, the lease expires; another worker <b>rebuilds state from the ledger</b> and continues from the last committed step.</li>
-      <li>An already-observed call <b>short-circuits</b> to its recorded result; a dispatched-but-unobserved call is <b>re-dispatched with the same key</b>.</li>
-    </ol>
-  </div>
-</section>
-
-<!-- FEATURES -->
-<section id="features">
-  <div class="wrap">
-    <h2>What you get</h2>
-    <div class="grid">
-      <div class="feat"><div class="ic">[ ]</div><h3>Crash-safe</h3><p>Lease + heartbeat + ledger replay. Kill <code>-9</code> any worker; another resumes.</p></div>
-      <div class="feat"><div class="ic">{ }</div><h3>Idempotent tools</h3><p>A crash-stable key per tool call, enforced by <code>UNIQUE(run_id, key)</code>.</p></div>
-      <div class="feat"><div class="ic">⌥</div><h3>Append-only ledger</h3><p>Every plan / tool_call / observation step is committed before the next. Full audit, free.</p></div>
-      <div class="feat"><div class="ic">↺</div><h3>Replay &amp; fork</h3><p>Re-run a trace prefix from any step without re-calling the model or re-running tools.</p></div>
-      <div class="feat"><div class="ic">✓</div><h3>Policy hook</h3><p><code>allow</code> / <code>deny</code> / <code>require_approval</code> evaluated before every tool dispatch.</p></div>
-      <div class="feat"><div class="ic">$</div><h3>Budget hard-stop</h3><p>Per-run <code>budget_cap_cents</code>; the run halts atomically before it breaches.</p></div>
-      <div class="feat"><div class="ic">≡</div><h3>Control API + SSE</h3><p>REST with a single static key and a live step stream. The dashboard is just a client.</p></div>
-      <div class="feat"><div class="ic">▸</div><h3>Dashboard</h3><p>Runs list, step-ledger timeline, live SSE, visible crash-resume markers, fork-here.</p></div>
-      <div class="feat"><div class="ic">◆</div><h3>Postgres-only</h3><p>One infra dependency. The <code>runs</code> table is the queue. No Redis, no broker.</p></div>
+  run state  =  pure fold over run_steps   <span style="color:var(--muted)">— which is what makes replay deterministic</span></div>
+    </div>
+    <div class="pill-row">
+      <span class="pill">runs = <span class="accent">nodes</span></span>
+      <span class="pill">steps = <span class="accent">edges</span></span>
+      <span class="pill">workers = <span class="accent">agents on the graph</span></span>
+      <span class="pill">ledger = <span class="accent">immutable timeline</span></span>
+      <span class="pill">fork = <span class="accent">branching dimension</span></span>
     </div>
   </div>
 </section>
 
-<!-- INSTALL -->
-<section id="install">
+<!-- ===================== SECTION 3 — ARCHITECTURE ===================== -->
+<section id="architecture">
   <div class="wrap">
-    <h2>Install</h2>
-    <p class="lead">Two ways in. The whole stack — Postgres, control API, dashboard, and a
-      worker — comes up with one command.</p>
-    <div class="install-tabs">
-      <button class="active" data-pane="docker">docker compose</button>
-      <button data-pane="pip">pip</button>
-      <button data-pane="sdk">use from Python</button>
+    <div class="sec-head">
+      <span class="eyebrow">Architecture</span>
+      <h2>Three layers. One dependency.</h2>
+      <p>A thin SDK over a state machine over two Postgres tables. Hover a layer to see what lives there.</p>
     </div>
-
-    <div class="pane active" id="pane-docker">
-      <pre class="code"><span class="c"># Postgres + control API + dashboard + 1 worker</span>
-docker compose up
-
-<span class="c"># scale workers horizontally</span>
-docker compose up --scale worker=3</pre>
-      <p style="color:var(--muted);font-size:13.5px;margin-top:12px;">
-        Then open <a href="/app">the dashboard</a> (host port <code>8088</code> in this
-        environment), enqueue a run, and watch its live step timeline. Host ports are
-        overridable via <code>AVATAR_API_HOST_PORT</code> / <code>AVATAR_PG_HOST_PORT</code>.</p>
+    <div class="stack">
+      <div class="layer">
+        <div class="ix">L1</div>
+        <div><h3>SDK Layer</h3><p>Python decorators wrap your existing tool loop. <code class="mono">@app.agent</code>, <code class="mono">@tool</code>, <code class="mono">Plan → ToolCall → Observation</code>.</p></div>
+        <div class="reveal">@agent · @tool · Plan/ToolCall</div>
+      </div>
+      <div class="stack-edge"></div>
+      <div class="layer">
+        <div class="ix">L2</div>
+        <div><h3>Execution Engine</h3><p>Leases a run with <code class="mono">FOR UPDATE SKIP LOCKED</code>, heartbeats ownership, commits each step, recovers expired leases.</p></div>
+        <div class="reveal">lease transitions · worker state</div>
+      </div>
+      <div class="stack-edge"></div>
+      <div class="layer">
+        <div class="ix">L3</div>
+        <div><h3>Postgres Ledger</h3><p>The <code class="mono">runs</code> table <b>is</b> the queue. <code class="mono">run_steps</code> is the append-only ledger. No Redis, no broker.</p></div>
+        <div class="reveal">runs · run_steps</div>
+      </div>
     </div>
+    <div class="pipeline" style="margin-top:28px;">  SDK ──▶ API ──▶ Postgres ──▶ Worker ──▶ Tools
+                  <span style="color:var(--muted)">↑</span>                 <span style="color:var(--muted)">↓</span>
+            Dashboard <span style="color:var(--muted)">◀── SSE stream ──</span></div>
+  </div>
+</section>
 
-    <div class="pane" id="pane-pip">
-      <pre class="code"><span class="c"># from the repo root</span>
-pip install -e .
-
-<span class="c"># the crash-resume proof (kills a real worker)</span>
-python -m avatar.cli demo
-
-<span class="c"># run the API + dashboard, and a worker</span>
-avatar serve
-avatar worker          <span class="c"># scale by running more</span></pre>
+<!-- ===================== SECTION 4 — CRASH SAFETY (VIRAL) ===================== -->
+<section id="crash">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">The viral moment</span>
+      <h2>Kill the process. The system continues.</h2>
+      <p>A worker is killed after <code class="mono">issue_refund</code> dispatches but before its observation commits — the decisive crash window. A fresh worker re-leases the run and resumes from the ledger.</p>
     </div>
+    <div class="crash-demo">
+      <div class="crash-stage">
+        <svg id="crashSvg" viewBox="0 0 760 200" width="100%" height="200" style="max-width:760px;"></svg>
+      </div>
+      <div class="crash-bar">
+        <div class="crash-caption" id="crashCaption">A worker can die at any point. Another resumes from the ledger with no loss of state.</div>
+        <div class="crash-result">
+          <div class="stat warn"><div class="n">2</div><div class="c">dispatch attempts</div></div>
+          <div class="stat ok"><div class="n">1</div><div class="c">tool effect</div></div>
+        </div>
+        <button class="btn sm" id="crashReplay">▸ Replay sequence</button>
+      </div>
+    </div>
+    <p style="margin-top:18px;font-family:var(--font-display);font-size:20px;">“Tool was dispatched twice. <span class="accent">Effect happened once.</span>”</p>
+    <p class="muted" style="font-size:13.5px;">Not a mock — <code class="mono">python -m avatar.cli demo</code> kills a real worker process with <code class="mono">SIGKILL</code>.</p>
+  </div>
+</section>
 
-    <div class="pane" id="pane-sdk">
-      <pre class="code"><span class="k">from</span> avatar <span class="k">import</span> Avatar, tool, Plan, ToolCall
+<!-- ===================== SECTION 5 — GUARANTEES ===================== -->
+<section id="guarantees">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Guarantees</span>
+      <h2>Five guarantees. Each one provable in SQL.</h2>
+      <p>Hover a node to reveal the schema-level mechanism that enforces it.</p>
+    </div>
+    <div class="guarantees" id="guaranteeGrid"></div>
+  </div>
+</section>
 
-app = Avatar(api_url=<span class="s">"http://localhost:8088"</span>, api_key=<span class="s">"dev-key"</span>)
-
-<span class="k">@tool</span>(timeout=10, retries=2)
-<span class="k">def</span> issue_refund(order_id, cents):
-    <span class="c"># Your real side effect. Forward current_idempotency_key()</span>
-    <span class="c"># to the downstream for exactly-once end-to-end.</span>
-    <span class="k">return</span> {<span class="s">"refunded"</span>: True}
-
-<span class="k">@app.agent</span>(<span class="s">"support-resolver"</span>)
-<span class="k">def</span> resolve(state):
-    <span class="k">if</span> any(m[<span class="s">"role"</span>] == <span class="s">"tool"</span> <span class="k">for</span> m <span class="k">in</span> state.messages):
-        <span class="k">return</span> Plan(final=True, output={<span class="s">"status"</span>: <span class="s">"done"</span>})
-    <span class="k">return</span> Plan(tool_calls=[ToolCall(id=<span class="s">"c1"</span>, name=<span class="s">"issue_refund"</span>,
-                                     arguments={<span class="s">"order_id"</span>: <span class="s">"42"</span>, <span class="s">"cents"</span>: 500})])
-
-run = app.runs.create(agent_ref=<span class="s">"support-resolver"</span>, input={<span class="s">"ticket_id"</span>: 42})
-print(app.runs.wait(run[<span class="s">"id"</span>]))</pre>
-      <p style="color:var(--muted);font-size:13.5px;margin-top:12px;">
-        Point the worker at your module with <code>AVATAR_APP=yourpkg.agents</code>. The engine
-        drives the durable loop; you write only the model call and the tools.</p>
+<!-- ===================== SECTION 6 — DEVELOPER EXPERIENCE ===================== -->
+<section id="dx">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Developer experience</span>
+      <h2>Write the model call and the tools. We drive the durable loop.</h2>
+      <p>Decorate an agent, register tools, and watch the execution graph grow in real time.</p>
+    </div>
+    <div class="split">
+      <div class="dx-code" id="dxCode"></div>
+      <div class="dx-graph">
+        <div class="glabel">live execution graph</div>
+        <svg id="dxSvg" viewBox="0 0 360 260" width="100%" height="260"></svg>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- WHO -->
-<section id="who">
+<!-- ===================== SECTION 7 — DASHBOARD + CRASH SLIDER ===================== -->
+<section id="dashboard">
   <div class="wrap">
-    <h2>Who it's for</h2>
-    <p class="lead">Backend engineers whose AI agents touch <b>real, stateful, money-or-data-changing
-      systems</b> — issuing refunds, provisioning accounts, updating CRM/billing, writing to ledgers —
-      and who have already been burned by an in-memory loop losing state or double-firing a side effect
-      on a deploy or crash. If your agent only chats, you don't need Avatar. If it <i>acts</i>, you do.</p>
+    <div class="sec-head">
+      <span class="eyebrow">Observability</span>
+      <h2>A real-time dashboard over Postgres state.</h2>
+      <p>Runs list, run-graph timeline, inspector, and a live SSE event stream — all reading directly off the ledger.</p>
+    </div>
+
+    <div class="dash-preview">
+      <div class="chrome"><i></i><i></i><i></i><span class="url">avatar.local/app</span></div>
+      <div class="dash-grid">
+        <div class="side">
+          <a class="on">Runs</a><a>Active</a><a>Failed</a><a>Replay</a><a>Approval queue</a>
+        </div>
+        <div class="main">
+          <div class="glabel" style="position:absolute;top:12px;left:16px;font-family:var(--font-mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">run graph · refund-demo</div>
+          <svg id="dashSvg" viewBox="0 0 520 260" width="100%" height="260" style="margin-top:18px;"></svg>
+        </div>
+        <div class="insp">
+          <div style="color:var(--paper);font-family:var(--font-display);margin-bottom:10px;">Inspector</div>
+          <div><span class="k">tool</span> issue_refund</div>
+          <div><span class="k">idem_key</span> r42:c2:a1</div>
+          <div><span class="k">worker</span> host:6226</div>
+          <div><span class="k">attempt</span> 2</div>
+          <div><span class="k">status</span> deduped ✓</div>
+          <div style="margin-top:14px;color:var(--paper);font-family:var(--font-display);">Event stream</div>
+          <div id="sseFeed" style="margin-top:8px;line-height:1.8;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Crash slider / replay scrubber -->
+    <div class="scrubber-wrap" style="margin-top:24px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+        <span class="eyebrow" style="margin:0;">Crash slider</span>
+        <span class="muted" style="font-size:13px;">scrub the ledger to reconstruct graph state at any step — deterministic replay.</span>
+      </div>
+      <div class="scrub-track" id="scrubTrack"></div>
+      <div class="scrub-controls">
+        <input type="range" class="crash-slider" id="crashSlider" min="0" max="10" value="10" step="1" />
+        <span class="scrub-readout" id="scrubReadout">step <b>#10</b> · run <b>succeeded</b></span>
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- SCOPE -->
-<section id="scope">
+<!-- ===================== CTA BAND ===================== -->
+<section class="cta-band">
   <div class="wrap">
-    <h2>Scope</h2>
-    <p class="scope">This is <b>single-purpose infrastructure</b>, not a platform. It is
-      <b>not</b> a SaaS, not multi-tenant, not a marketplace, not BYOK, not voice/avatars,
-      not multi-agent orchestration. Those are sequenced behind the wedge — a hosted Avatar
-      Cloud, governance, and a multi-agent fabric — built in the order that actually ships.</p>
+    <span class="eyebrow" style="justify-content:center;display:inline-flex;">Avatar Runtime</span>
+    <h2>Durable execution for AI agents — built on Postgres.</h2>
+    <p class="sub">A worker can die at any point. Another resumes from the ledger with no loss of state.</p>
+    <div class="cta" style="justify-content:center;margin-top:30px;display:flex;gap:12px;flex-wrap:wrap;">
+      <a class="btn" href="/app">Open the dashboard →</a>
+      <a class="btn ghost" href="https://github.com/Mwaivictor/Avatar">Star on GitHub</a>
+    </div>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <div class="logo" style="font-weight:700">Avatar<span style="color:var(--accent)">.</span></div>
-    <span>A durable execution engine for AI agents.</span>
-    <span style="margin-left:auto">
-      <a href="/app">Dashboard</a> &nbsp;·&nbsp;
-      <a href="/docs">API</a> &nbsp;·&nbsp;
-      <a href="https://github.com/Mwaivictor/Avatar">GitHub</a> &nbsp;·&nbsp;
-      <a href="#install">Install</a>
+    <span class="brand">
+      <svg class="logo-lattice" width="22" height="22" viewBox="0 0 32 32"></svg>
+      Avatar Runtime
+    </span>
+    <span class="muted">Durable execution for AI agents — built on Postgres.</span>
+    <span class="flinks">
+      <a href="/app">Dashboard</a>
+      <a href="#architecture">Architecture</a>
+      <a href="https://github.com/Mwaivictor/Avatar">GitHub</a>
     </span>
   </div>
 </footer>
 
-<script>
-  document.querySelectorAll(".install-tabs button").forEach(b => b.onclick = () => {
-    document.querySelectorAll(".install-tabs button").forEach(x => x.classList.remove("active"));
-    document.querySelectorAll(".pane").forEach(p => p.classList.remove("active"));
-    b.classList.add("active");
-    document.getElementById("pane-" + b.dataset.pane).classList.add("active");
-  });
-</script>
+<script src="/static/lattice.js"></script>
+<script src="/static/landing.js"></script>
 </body>
 </html>
