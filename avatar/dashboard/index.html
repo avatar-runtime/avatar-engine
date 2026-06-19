@@ -3,82 +3,186 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Avatar — durable execution</title>
+<title>Avatar Runtime — execution graph</title>
+<link rel="stylesheet" href="/static/avatar.css" />
 <style>
-  :root {
-    --bg:#0f172a; --panel:#1e293b; --panel2:#172033; --line:#334155;
-    --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --accent2:#0ea5e9;
-    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* ===================== Dashboard shell ===================== */
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px; border-bottom: 1px solid var(--line);
+    background: var(--slate); position: sticky; top: 0; z-index: 20;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text);
-         font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  header { display:flex; align-items:center; gap:16px; padding:14px 22px;
-           border-bottom:1px solid var(--line); background:var(--panel2); position:sticky; top:0; z-index:5;}
-  header .logo { font-weight:700; letter-spacing:.5px; }
-  header .logo span { color:var(--accent); }
-  header nav a { color:var(--muted); text-decoration:none; margin-right:14px; cursor:pointer; }
-  header nav a:hover, header nav a.active { color:var(--text); }
-  .tag { font-size:11px; color:var(--muted); border:1px solid var(--line); padding:2px 8px; border-radius:999px; }
-  main { padding:22px; max-width:1100px; margin:0 auto; }
-  h2 { font-size:16px; margin:0 0 14px; }
-  table { width:100%; border-collapse:collapse; }
-  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); }
-  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.4px;}
-  tr.run { cursor:pointer; }
-  tr.run:hover { background:var(--panel); }
-  .id { font-family:var(--mono); font-size:12px; color:var(--accent); }
-  .badge { font-size:11px; padding:2px 9px; border-radius:999px; font-weight:600; }
-  .b-queued{background:#334155;color:#cbd5e1;} .b-leased,.b-running{background:#0c4a6e;color:#7dd3fc;}
-  .b-succeeded{background:#14532d;color:#86efac;} .b-failed,.b-dead{background:#7f1d1d;color:#fca5a5;}
-  .b-approval_wait{background:#78350f;color:#fcd34d;} .b-paused{background:#3b0764;color:#d8b4fe;}
-  .running .badge { animation:pulse 1.4s infinite; }
-  @keyframes pulse { 50% { opacity:.5; } }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
-  .row { display:flex; gap:24px; flex-wrap:wrap; }
-  .kv { font-size:13px; } .kv b { color:var(--muted); font-weight:600; }
-  button { background:var(--accent2); color:#07212f; border:0; padding:7px 13px; border-radius:7px;
-           font-weight:600; cursor:pointer; }
-  button.ghost { background:transparent; border:1px solid var(--line); color:var(--muted); }
-  button:hover { filter:brightness(1.08); }
-  .timeline { position:relative; margin-top:8px; }
-  .step { border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px;
-          padding:10px 12px; margin:8px 0; background:var(--panel2); }
-  .step .head { display:flex; align-items:center; gap:10px; cursor:pointer; }
-  .step .seq { font-family:var(--mono); color:var(--muted); }
-  .step .stype { font-weight:600; }
-  .t-plan{border-left-color:#a78bfa;} .t-tool_call{border-left-color:#f59e0b;}
-  .t-observation{border-left-color:#22c55e;} .t-final{border-left-color:#38bdf8;}
-  .t-error{border-left-color:#ef4444;} .t-approval_wait{border-left-color:#fcd34d;}
-  pre { background:#0b1220; border:1px solid var(--line); border-radius:7px; padding:10px;
-        overflow:auto; font-size:12px; color:#cbd5e1; margin:8px 0 0; }
-  .resume { display:flex; align-items:center; gap:8px; color:var(--warn); font-weight:600;
-            margin:14px 0 4px; font-size:13px; }
-  .resume::before { content:"▸"; }
-  .muted { color:var(--muted); }
-  .right { margin-left:auto; }
-  .pill { font-family:var(--mono); font-size:11px; color:var(--muted); }
-  .demo h1 { font-size:22px; } .big { font-size:34px; font-weight:800; }
-  .stat { text-align:center; padding:18px; border:1px solid var(--line); border-radius:10px; min-width:150px;}
-  .stat .n { font-size:30px; font-weight:800; } .stat.ok .n{color:var(--ok);} .stat.bad .n{color:var(--bad);}
+  .topbar .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+  .topbar .env { font-family: var(--font-mono); font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .conn { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .conn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .conn.off .dot { background: var(--crash); box-shadow: 0 0 8px var(--crash); }
+
+  .shell { flex: 1; display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+  .sidebar { border-right: 1px solid var(--line); padding: 18px 14px; background: var(--ink); overflow-y: auto; }
+  .sidebar .group { margin-bottom: 22px; }
+  .sidebar .glabel { font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); padding: 0 8px; margin-bottom: 8px; }
+  .navitem {
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    padding: 8px 10px; border-radius: 8px; color: var(--muted); font-size: 14px;
+    transition: background .15s, color .15s; user-select: none;
+  }
+  .navitem:hover { color: var(--paper); background: var(--slate); }
+  .navitem.on { color: var(--accent); background: var(--accent-dim); }
+  .navitem .cnt { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .navitem .ic { width: 16px; text-align: center; opacity: .9; }
+
+  main { overflow-y: auto; padding: 22px 26px; min-width: 0; }
+  @media (max-width: 820px){ .shell { grid-template-columns: 1fr; } .sidebar { display: none; } }
+
+  h2.title { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 12px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+
+  /* runs table */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  tr.run { cursor: pointer; transition: background .12s; }
+  tr.run:hover { background: var(--slate); }
+  .id { font-family: var(--font-mono); font-size: 12.5px; color: var(--accent); }
+  .mono-sm { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+  .crumb { font-size: 13px; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+  .crumb:hover { color: var(--paper); }
+
+  /* run detail layout */
+  .run-layout { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+  @media (max-width: 1080px){ .run-layout { grid-template-columns: 1fr; } }
+
+  .meta-row { display: flex; flex-wrap: wrap; gap: 22px; align-items: center; }
+  .kv { font-size: 13px; } .kv b { color: var(--muted); font-weight: 500; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: 2px; }
+  .actions { margin-left: auto; display: flex; gap: 8px; }
+
+  .panel-h { display: flex; align-items: center; gap: 10px; margin: 24px 0 12px; }
+  .panel-h h3 { font-size: 14px; font-family: var(--font-display); }
+  .panel-h .tag { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+
+  /* run graph */
+  .graph-wrap {
+    border: 1px solid var(--line); border-radius: var(--radius); position: relative;
+    background:
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 32px 32px,
+      linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 32px 32px,
+      var(--slate);
+    overflow-x: auto;
+  }
+  .graph-wrap svg { display: block; }
+
+  /* crash slider (in-app replay scrubber) */
+  .scrub { border: 1px solid var(--line); border-radius: var(--radius); background: var(--slate); padding: 14px 16px; margin-top: 14px; }
+  .scrub .row { display: flex; align-items: center; gap: 14px; }
+  input[type=range].crash-slider { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 999px; background: var(--line); flex: 1; outline: none; }
+  input[type=range].crash-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: 0 0 0 4px var(--accent-dim); }
+  input[type=range].crash-slider::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--accent); cursor: pointer; }
+  .scrub .readout { font-family: var(--font-mono); font-size: 12px; color: var(--muted); min-width: 150px; }
+  .scrub .readout b { color: var(--accent); }
+
+  /* step ledger */
+  .timeline { margin-top: 6px; }
+  .step {
+    border: 1px solid var(--line); border-left: 3px solid var(--nc, var(--line));
+    border-radius: var(--radius-sm); padding: 11px 13px; margin: 8px 0; background: var(--slate);
+    transition: border-color .15s;
+  }
+  .step.sel { border-color: var(--accent-ln); border-left-color: var(--accent); }
+  .step .head { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .step .seq { font-family: var(--font-mono); color: var(--muted); font-size: 12px; }
+  .step .stype { font-weight: 600; font-size: 13.5px; font-family: var(--font-display); }
+  .step .pill { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+  .step .right { margin-left: auto; }
+  .step pre { margin: 10px 0 0; }
+  .resume { display: flex; align-items: center; gap: 8px; color: var(--warn); font-weight: 600; margin: 16px 0 4px; font-size: 12.5px; font-family: var(--font-mono); }
+  .resume::before { content: "▸"; }
+  .resume::after { content: ""; flex: 1; height: 1px; background: repeating-linear-gradient(90deg, var(--warn) 0 6px, transparent 6px 12px); opacity: .4; }
+
+  /* inspector + event stream (right rail) */
+  .rail { position: sticky; top: 78px; display: flex; flex-direction: column; gap: 16px; }
+  .insp .field { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .insp .field:last-child { border-bottom: 0; }
+  .insp .field .k { font-family: var(--font-mono); color: var(--muted); font-size: 11px; }
+  .insp .field .v { font-family: var(--font-mono); color: var(--paper); text-align: right; word-break: break-all; }
+  .insp .field .v.accent { color: var(--accent); }
+  .insp pre { max-height: 200px; }
+  .feed { display: flex; flex-direction: column; gap: 0; max-height: 280px; overflow-y: auto; }
+  .feed .ev { display: flex; align-items: center; gap: 9px; padding: 6px 0; border-bottom: 1px solid var(--line); font-family: var(--font-mono); font-size: 11.5px; }
+  .feed .ev:last-child { border-bottom: 0; }
+  .feed .ev .d { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .feed .ev .t { color: var(--muted); margin-left: auto; }
+
+  /* stat cards */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 14px; }
+  .stat { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; background: var(--slate); }
+  .stat .n { font-family: var(--font-display); font-size: 30px; font-weight: 700; }
+  .stat.ok .n { color: var(--accent); } .stat.bad .n { color: var(--crash); }
+  .stat .c { color: var(--muted); font-size: 12px; margin-top: 4px; font-family: var(--font-mono); }
+
+  .empty { color: var(--muted); text-align: center; padding: 40px; font-size: 14px; }
+  .demo-stat { text-align: center; border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; min-width: 150px; }
+  .demo-stat .n { font-family: var(--font-display); font-size: 32px; font-weight: 700; }
+  .demo-stat.ok .n { color: var(--accent); }
+  .flex { display: flex; gap: 14px; flex-wrap: wrap; }
+  .hide { display: none; }
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">Avatar<span>.</span></div>
-  <nav>
-    <a data-route="#/" class="navlink">Runs</a>
-    <a data-route="#/demo" class="navlink">Demo</a>
-    <a data-route="#/health" class="navlink">Health</a>
-  </nav>
-  <span class="tag right">Temporal for AI agents · Postgres-only</span>
-</header>
-<main id="app">loading…</main>
 
+<div class="topbar">
+  <div class="brand">
+    <svg class="logo-lattice" width="22" height="22" viewBox="0 0 32 32"></svg>
+    Avatar Runtime
+  </div>
+  <span class="env">execution graph</span>
+  <div class="right">
+    <div class="conn" id="conn"><span class="dot"></span><span id="connText">live</span></div>
+    <a class="btn ghost sm" href="/">Landing</a>
+  </div>
+</div>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="group">
+      <div class="glabel">Runs</div>
+      <div class="navitem on" data-route="#/" ><span class="ic">▤</span> All runs <span class="cnt" id="c-all"></span></div>
+      <div class="navitem" data-route="#/active"><span class="ic">◆</span> Active <span class="cnt" id="c-active"></span></div>
+      <div class="navitem" data-route="#/failed"><span class="ic">✕</span> Failed <span class="cnt" id="c-failed"></span></div>
+    </div>
+    <div class="group">
+      <div class="glabel">Operate</div>
+      <div class="navitem" data-route="#/approvals"><span class="ic">⊜</span> Approval queue <span class="cnt" id="c-appr"></span></div>
+      <div class="navitem" data-route="#/replay"><span class="ic">↺</span> Replay &amp; fork</div>
+      <div class="navitem" data-route="#/demo"><span class="ic">▸</span> Crash demo</div>
+      <div class="navitem" data-route="#/health"><span class="ic">❤</span> Health</div>
+    </div>
+    <div class="group">
+      <div class="glabel">Legend</div>
+      <div style="display:flex;flex-direction:column;gap:8px;padding:0 8px;font-family:var(--font-mono);font-size:11px;color:var(--muted)">
+        <span><span style="color:#9C8CF0">■</span> plan</span>
+        <span><span style="color:#E5B567">■</span> tool_call</span>
+        <span><span style="color:#2DD4A7">■</span> observation / final</span>
+        <span><span style="color:#F0506A">■</span> crash / error</span>
+      </div>
+    </div>
+  </aside>
+
+  <main id="app">loading…</main>
+</div>
+
+<script src="/static/lattice.js"></script>
 <script>
-// In dev mode the server injects the key here. In production it ships empty,
-// so we ask the operator once and keep it in localStorage — the key is never
-// embedded in the served HTML.
+// ============================================================================
+// API wiring (unchanged contract). In dev mode the server injects the key here.
+// In production it ships empty, so we ask the operator once and keep it in
+// localStorage — the key is never embedded in the served HTML.
+// ============================================================================
 const INJECTED = "__AVATAR_API_KEY__";
 function resolveKey() {
   if (INJECTED) return INJECTED;
@@ -91,211 +195,447 @@ function resolveKey() {
 }
 const API_KEY = resolveKey();
 const H = { "Authorization": "Bearer " + API_KEY, "Content-Type": "application/json" };
-// On 401, forget the stored key so the next load re-prompts.
 function forgetKeyOn401(status) { if (status === 401 && !INJECTED) { localStorage.removeItem("avatar_api_key"); location.reload(); } }
-const app = document.getElementById("app");
-let es = null; // active EventSource-like reader
 
-async function api(path, opts={}) {
-  const r = await fetch(path, { headers:H, ...opts });
+const app = document.getElementById("app");
+let es = null;             // active stream reader (AbortController)
+let currentRunId = null;
+let selectedSeq = null;    // inspector selection
+let lastSteps = [];        // cache of the current run's steps for the scrubber/inspector
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: H, ...opts });
   if (!r.ok) { forgetKeyOn401(r.status); throw new Error(await r.text()); }
   return r.status === 202 || r.headers.get("content-type")?.includes("json") ? r.json() : null;
 }
-const esc = s => (s??"").toString().replace(/[&<>]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]));
-const badge = s => `<span class="badge b-${s}">${s}</span>`;
+const esc = s => (s ?? "").toString().replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const badge = s => `<span class="badge b-${s}">${esc(s)}</span>`;
+const STEP_COLOR = { plan: "#9C8CF0", tool_call: "#E5B567", observation: "#2DD4A7", final: "#2DD4A7", error: "#F0506A", approval_wait: "#E5B567" };
 
-function setActive() {
-  document.querySelectorAll(".navlink").forEach(a =>
-    a.classList.toggle("active", a.dataset.route === (location.hash.startsWith("#/runs/")? "":location.hash || "#/")));
+function setConn(live) {
+  const c = document.getElementById("conn");
+  c.classList.toggle("off", !live);
+  document.getElementById("connText").textContent = live ? "live" : "offline";
 }
 
-async function viewRuns() {
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
+function setActiveNav() {
+  const h = location.hash || "#/";
+  const route = h.startsWith("#/runs/") ? "#/" : h;
+  document.querySelectorAll(".navitem").forEach(n => n.classList.toggle("on", n.dataset.route === route));
+}
+document.querySelectorAll(".navitem").forEach(n => n.onclick = () => location.hash = n.dataset.route);
+
+async function refreshCounts() {
+  try {
+    const s = await api("/v1/stats");
+    const by = s.by_status || {};
+    document.getElementById("c-all").textContent = Object.values(by).reduce((a, b) => a + b, 0) || "";
+    document.getElementById("c-active").textContent = (s.running || 0) + (by.queued || 0) || "";
+    document.getElementById("c-failed").textContent = (by.failed || 0) + (by.dead || 0) || "";
+    document.getElementById("c-appr").textContent = by.approval_wait || "";
+    setConn(true);
+  } catch (e) { setConn(false); }
+}
+
+// ---------------------------------------------------------------------------
+// Runs list (supports filter: all / active / failed / approvals)
+// ---------------------------------------------------------------------------
+const FILTERS = {
+  active: r => ["queued", "leased", "running"].includes(r.status),
+  failed: r => ["failed", "dead"].includes(r.status),
+  approvals: r => r.status === "approval_wait",
+};
+async function viewRuns(filter) {
   const data = await api("/v1/runs?limit=100");
-  const rows = data.runs.map(r => `
+  let runs = data.runs;
+  if (FILTERS[filter]) runs = runs.filter(FILTERS[filter]);
+  const titleMap = { active: "Active runs", failed: "Failed runs", approvals: "Approval queue" };
+  const rows = runs.map(r => `
     <tr class="run ${r.status}" onclick="location.hash='#/runs/${r.id}'">
-      <td class="id">${r.id.slice(0,8)}</td>
+      <td class="id">${r.id.slice(0, 8)}</td>
       <td>${esc(r.agent_ref)}</td>
       <td>${badge(r.status)}</td>
-      <td>${r.attempt}</td>
-      <td>${(r.budget_used_cents/100).toFixed(2)}</td>
-      <td class="muted">${new Date(r.created_at).toLocaleString()}</td>
+      <td class="mono-sm">${r.attempt}${r.attempt >= 2 ? ' <span class="badge b-approval_wait">resumed</span>' : ""}</td>
+      <td class="mono-sm">$${(r.budget_used_cents / 100).toFixed(2)}</td>
+      <td class="mono-sm">${new Date(r.created_at).toLocaleTimeString()}</td>
     </tr>`).join("");
-  app.innerHTML = `<h2>Runs <span class="muted pill">(${data.runs.length})</span></h2>
-    <div class="card"><table>
-      <thead><tr><th>id</th><th>agent</th><th>status</th><th>attempt</th><th>cost ($)</th><th>created</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan=6 class="muted">no runs yet — enqueue one via the SDK or <code>avatar demo</code></td></tr>'}</tbody>
-    </table></div>`;
+  app.innerHTML = `
+    <h2 class="title">${titleMap[filter] || "All runs"} <span class="mono-sm">(${runs.length})</span></h2>
+    <p class="sub">Every run is a node in the execution graph. Click a row to open its ledger and graph.</p>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>id</th><th>agent</th><th>status</th><th>attempt</th><th>cost</th><th>created</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" class="empty">no runs ${filter ? "in this view" : "yet"} — enqueue one via the SDK or <code class="mono">avatar demo</code></td></tr>`}</tbody>
+      </table>
+    </div>`;
 }
 
-function stepCard(s) {
-  const p = JSON.stringify(s.payload, null, 2);
-  const idem = s.idempotency_key ? `<span class="pill">idem:${esc(s.idempotency_key).slice(0,16)}…</span>` : "";
-  return `<div class="step t-${s.type}" data-seq="${s.seq}">
-    <div class="head" onclick="this.parentNode.querySelector('pre').classList.toggle('hide');this.parentNode.querySelector('pre').style.display = this.parentNode.querySelector('pre').style.display==='none'?'block':'none';">
-      <span class="seq">#${s.seq}</span>
-      <span class="stype">${s.type}</span>
-      <span class="muted">${esc(s.tool_call_id||"")}</span>
-      ${idem}
-      <span class="right pill">${esc(s.worker_id||"")} · attempt ${s.attempt}</span>
-      <button class="ghost" onclick="event.stopPropagation();forkHere('${s.seq}')">Fork here</button>
-    </div>
-    <pre style="display:none">${esc(p)}</pre>
-  </div>`;
-}
-
-let currentRunId = null;
+// ---------------------------------------------------------------------------
+// Run detail — graph + scrubber + ledger + inspector + event stream
+// ---------------------------------------------------------------------------
 async function viewRun(id) {
   currentRunId = id;
   const run = await api(`/v1/runs/${id}`);
   const steps = await api(`/v1/runs/${id}/steps`);
+  lastSteps = steps;
+  if (selectedSeq == null && steps.length) selectedSeq = steps[steps.length - 1].seq;
   renderRun(run, steps);
-  streamRun(id);
+  streamRun(id, run);
 }
 
 function renderRun(run, steps) {
-  let timeline = "", prevAttempt = null;
-  for (const s of steps) {
-    if (prevAttempt !== null && s.attempt !== prevAttempt)
-      timeline += `<div class="resume">resumed by ${esc(s.worker_id||"worker")} (attempt ${s.attempt}) — crash recovery from the ledger</div>`;
-    prevAttempt = s.attempt;
-    timeline += stepCard(s);
-  }
   const approve = run.status === "approval_wait"
-    ? `<button onclick="decide('approve')">Approve</button>
-       <button class="ghost" onclick="decide('reject')">Reject</button>` : "";
-  const cancel = ["queued","leased","running"].includes(run.status)
-    ? `<button class="ghost" onclick="cancelRun()">Cancel</button>` : "";
+    ? `<button class="btn sm" onclick="decide('approve')">Approve</button>
+       <button class="btn ghost sm" onclick="decide('reject')">Reject</button>` : "";
+  const cancel = ["queued", "leased", "running"].includes(run.status)
+    ? `<button class="btn ghost sm" onclick="cancelRun()">Cancel</button>` : "";
+
   app.innerHTML = `
-    <a class="muted" onclick="location.hash='#/'" style="cursor:pointer">← all runs</a>
-    <h2 style="margin-top:8px">Run <span class="id">${run.id}</span> ${badge(run.status)}</h2>
-    <div class="card row">
-      <div class="kv"><b>agent</b> ${esc(run.agent_ref)}</div>
-      <div class="kv"><b>attempt</b> ${run.attempt}</div>
-      <div class="kv"><b>cost</b> $${(run.budget_used_cents/100).toFixed(2)}${run.budget_cap_cents?` / $${(run.budget_cap_cents/100).toFixed(2)}`:""}</div>
-      <div class="kv"><b>error</b> ${esc(run.error_class||"—")}</div>
-      ${run.forked_from?`<div class="kv"><b>forked from</b> <span class="id">${run.forked_from.slice(0,8)}</span> @${run.fork_seq}</div>`:""}
-      <div class="right">${approve} ${cancel}</div>
+    <span class="crumb" onclick="location.hash='#/'">← all runs</span>
+    <h2 class="title">Run <span class="id">${run.id.slice(0, 12)}…</span> ${badge(run.status)}</h2>
+    <div class="card" style="margin-bottom:8px">
+      <div class="meta-row">
+        <div class="kv"><b>agent</b> ${esc(run.agent_ref)}</div>
+        <div class="kv"><b>attempt</b> ${run.attempt}</div>
+        <div class="kv"><b>cost</b> $${(run.budget_used_cents / 100).toFixed(2)}${run.budget_cap_cents ? ` / $${(run.budget_cap_cents / 100).toFixed(2)}` : ""}</div>
+        <div class="kv"><b>error</b> ${esc(run.error_class || "—")}</div>
+        ${run.forked_from ? `<div class="kv"><b>forked from</b> <span class="id">${run.forked_from.slice(0, 8)}</span> @${run.fork_seq}</div>` : ""}
+        <div class="actions">${approve} ${cancel}</div>
+      </div>
     </div>
-    ${run.output?`<div class="card"><b class="muted">output</b><pre>${esc(JSON.stringify(run.output,null,2))}</pre></div>`:""}
-    <h2>Step ledger <span class="muted pill">append-only</span></h2>
-    <div class="timeline" id="timeline">${timeline||'<span class="muted">no steps yet</span>'}</div>`;
+
+    <div class="run-layout">
+      <div>
+        <div class="panel-h"><h3>Run graph</h3><span class="tag">nodes = steps · edges = transitions</span></div>
+        <div class="graph-wrap" id="graphWrap"><svg id="runGraph" height="220"></svg></div>
+
+        <div class="scrub" id="scrub"></div>
+
+        <div class="panel-h"><h3>Step ledger</h3><span class="tag">append-only</span></div>
+        <div class="timeline" id="timeline"></div>
+
+        ${run.output ? `<div class="panel-h"><h3>Output</h3></div><pre class="code">${esc(JSON.stringify(run.output, null, 2))}</pre>` : ""}
+      </div>
+
+      <div class="rail">
+        <div class="card insp"><div class="panel-h" style="margin:0 0 8px"><h3>Inspector</h3></div><div id="inspBody"></div></div>
+        <div class="card"><div class="panel-h" style="margin:0 0 8px"><h3>Event stream</h3><span class="tag">SSE</span></div><div class="feed" id="feed"></div></div>
+      </div>
+    </div>`;
+
+  renderGraph(steps, run);
+  renderScrubber(steps, run);
+  renderLedger(steps);
+  renderInspector(steps);
 }
 
-async function streamRun(id) {
-  if (es) es.abort?.();
-  const ctrl = new AbortController(); es = ctrl;
-  try {
-    const resp = await fetch(`/v1/runs/${id}/stream`, { headers:H, signal:ctrl.signal });
-    const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf="";
-    while (true) {
-      const { value, done } = await reader.read(); if (done) break;
-      buf += dec.decode(value, {stream:true});
-      let i; while ((i = buf.indexOf("\n\n")) >= 0) {
-        const line = buf.slice(0, i).trim(); buf = buf.slice(i+2);
-        if (!line.startsWith("data:")) continue;
-        const ev = JSON.parse(line.slice(5).trim());
-        if (ev.event === "status" && currentRunId === id) { viewRun(id); return; }
-        if (ev.event === "step" && currentRunId === id) { viewRun(id); return; }
+// --- run graph (SVG): steps as nodes, transitions as edges, crash + fork markers
+function renderGraph(steps, run) {
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const svg = document.getElementById("runGraph");
+  if (!svg) return;
+  svg.innerHTML = "";
+  const node = (tag, a) => { const n = document.createElementNS(SVGNS, tag); for (const k in a) n.setAttribute(k, a[k]); return n; };
+
+  const GAP = 96, X0 = 56, Y = 90, SIZE = 38;
+  const W = Math.max(520, X0 + steps.length * GAP);
+  svg.setAttribute("viewBox", `0 0 ${W} 220`);
+  svg.setAttribute("width", W);
+
+  let prevAttempt = null, prevX = null, prevY = null;
+  steps.forEach((s, i) => {
+    const crashed = prevAttempt !== null && s.attempt !== prevAttempt;
+    const x = X0 + i * GAP;
+    const y = Y + (crashed ? 54 : 0) * 0; // keep single lane; mark crash with edge styling
+    const color = STEP_COLOR[s.type] || "#262C49";
+
+    // edge from previous
+    if (prevX !== null) {
+      const e = node("line", {
+        x1: prevX, y1: prevY, x2: x, y2: y,
+        stroke: crashed ? "#F0506A" : "#2DD4A7", "stroke-width": 2,
+        "stroke-dasharray": crashed ? "5 4" : "0", opacity: crashed ? .9 : .55,
+      });
+      svg.appendChild(e);
+      if (crashed) {
+        const cm = node("text", { x: (prevX + x) / 2, y: y - 22, "text-anchor": "middle", fill: "#E5B567", "font-family": "JetBrains Mono, monospace", "font-size": 9 });
+        cm.textContent = `▸ resumed a${s.attempt}`; svg.appendChild(cm);
       }
     }
-  } catch(e) { /* navigated away */ }
+
+    // node cube (beveled)
+    const g = node("g", { transform: `translate(${x},${y})`, style: "cursor:pointer" });
+    const sealed = (s.type === "final" || s.type === "observation");
+    g.appendChild(node("rect", { x: -SIZE / 2, y: -SIZE / 2, width: SIZE, height: SIZE, rx: 7, fill: s.seq === selectedSeq ? "rgba(45,212,167,.12)" : "#1B2138", stroke: color, "stroke-width": s.seq === selectedSeq ? 2.2 : 1.6 }));
+    g.appendChild(node("rect", { x: -SIZE / 2 + 4, y: -SIZE / 2 + 4, width: SIZE - 8, height: SIZE - 8, rx: 4, fill: "none", stroke: color, "stroke-width": 1, opacity: .3 }));
+    const glyph = s.type === "final" ? "✓" : s.type === "error" ? "✕" : `#${s.seq}`;
+    const t = node("text", { x: 0, y: 1, "text-anchor": "middle", "dominant-baseline": "central", fill: color, "font-family": "JetBrains Mono, monospace", "font-size": 10 });
+    t.textContent = glyph; g.appendChild(t);
+    const lab = node("text", { x: 0, y: SIZE / 2 + 16, "text-anchor": "middle", fill: "#8A93AD", "font-family": "JetBrains Mono, monospace", "font-size": 9 });
+    lab.textContent = s.type; g.appendChild(lab);
+    g.onclick = () => { selectedSeq = s.seq; renderGraph(lastSteps, run); renderInspector(lastSteps); highlightStep(s.seq); };
+    svg.appendChild(g);
+
+    prevAttempt = s.attempt; prevX = x; prevY = y;
+  });
+
+  if (!steps.length) {
+    const t = node("text", { x: 260, y: 100, "text-anchor": "middle", fill: "#8A93AD", "font-family": "JetBrains Mono, monospace", "font-size": 12 });
+    t.textContent = "no steps yet — the graph grows as the worker commits"; svg.appendChild(t);
+  }
 }
 
-async function forkHere(seq) {
-  const res = await api(`/v1/runs/${currentRunId}/replay`, { method:"POST", body:JSON.stringify({from_seq:Number(seq)}) });
-  location.hash = `#/runs/${res.id}`;
-}
-async function decide(kind) { await api(`/v1/runs/${currentRunId}/${kind}`, {method:"POST"}); viewRun(currentRunId); }
-async function cancelRun() { await api(`/v1/runs/${currentRunId}/cancel`, {method:"POST"}); viewRun(currentRunId); }
-
-async function viewDemo() {
-  // Pull recent refund-demo runs so a crash-resumed one (attempt >= 2) is visible.
-  let runs = [];
-  try { runs = (await api("/v1/runs?limit=100")).runs.filter(r => r.agent_ref === "refund-demo"); }
-  catch(e) {}
-  const resumed = runs.find(r => r.attempt >= 2);
-  const rows = runs.slice(0, 8).map(r => `
-    <tr class="run ${r.status}" onclick="location.hash='#/runs/${r.id}'">
-      <td class="id">${r.id.slice(0,8)}</td>
-      <td>${badge(r.status)}</td>
-      <td>${r.attempt}${r.attempt>=2?' <span class="badge b-approval_wait">crash-resumed</span>':''}</td>
-      <td>$${(r.budget_used_cents/100).toFixed(2)}</td>
-      <td class="muted">${new Date(r.created_at).toLocaleString()}</td>
-    </tr>`).join("");
-  app.innerHTML = `<div class="demo">
-    <h1>Crash-safe refund — the killer demo</h1>
-    <p class="muted big">"Crashed mid-refund. Restarted. The refund wasn't issued twice."</p>
-
-    <div class="card">
-      <b>What happens</b>
-      <ol class="muted" style="line-height:1.8">
-        <li>An agent runs <code>lookup_order → issue_refund → email_customer</code>.</li>
-        <li>A worker is killed <b>after <code>issue_refund</code> dispatches</b> but
-            <b>before its observation commits</b> — the decisive crash window (CRASH-C).</li>
-        <li>A fresh worker re-leases the run, rebuilds state from the Postgres ledger,
-            and re-dispatches the refund with the <b>same idempotency key</b>.</li>
-        <li>The downstream dedupes on that key. Net result:
-            <b>tool dispatch attempts may repeat, but tool effects cannot duplicate
-            when idempotency is enforced</b>.</li>
-      </ol>
-    </div>
-
+// --- crash slider / replay scrubber: reconstruct graph state up to seq
+function renderScrubber(steps, run) {
+  const box = document.getElementById("scrub");
+  if (!box || !steps.length) { if (box) box.classList.add("hide"); return; }
+  box.classList.remove("hide");
+  const max = steps.length - 1;
+  box.innerHTML = `
+    <div class="panel-h" style="margin:0 0 10px"><h3>Crash slider</h3><span class="tag">deterministic replay</span></div>
     <div class="row">
-      <div class="stat"><div class="n">2</div><div class="muted">dispatch attempts (may repeat)</div></div>
-      <div class="stat ok"><div class="n">1</div><div class="muted">tool effect (cannot duplicate)</div></div>
-      <div class="stat"><div class="n">▸</div><div class="muted">resume marker on the timeline</div></div>
-    </div>
-
-    <div class="card">
-      <b>Run it</b>
-      <p class="muted">From a terminal (a real worker process is killed with <code>SIGKILL</code>):</p>
-      <pre>python -m avatar.cli demo</pre>
-      <p class="muted">…then open the resulting run below to see the
-        <span style="color:var(--warn)">▸ resumed after crash</span> divider in the ledger.
-        Or enqueue a plain run here (it won't crash — workers in compose run normally):</p>
-      <button onclick="launchDemo()">Enqueue a refund-demo run</button>
-    </div>
-
-    <h2>Recent refund-demo runs ${resumed?'<span class="badge b-succeeded">a crash-resumed run is present ✓</span>':''}</h2>
-    <div class="card"><table>
-      <thead><tr><th>id</th><th>status</th><th>attempt</th><th>cost</th><th>created</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan=5 class="muted">none yet — run <code>avatar demo</code> or click the button above</td></tr>'}</tbody>
-    </table></div>
-  </div>`;
+      <input type="range" class="crash-slider" id="scrubInput" min="0" max="${max}" value="${max}" step="1" />
+      <span class="readout" id="scrubReadout"></span>
+    </div>`;
+  const input = document.getElementById("scrubInput");
+  const out = document.getElementById("scrubReadout");
+  function reconstruct(k) {
+    // fade graph nodes beyond k; the run state is a pure fold over the ledger
+    const svg = document.getElementById("runGraph");
+    if (svg) [...svg.querySelectorAll("g")].forEach((g, i) => { g.style.opacity = i <= k ? 1 : 0.22; });
+    const s = steps[k];
+    out.innerHTML = `step <b>#${s.seq}</b> · ${esc(s.type)} · attempt ${s.attempt}`;
+    selectedSeq = s.seq; renderInspector(steps);
+  }
+  input.addEventListener("input", () => reconstruct(+input.value));
+  reconstruct(max);
 }
 
-async function launchDemo() {
-  const res = await api("/v1/runs", { method:"POST",
-    body: JSON.stringify({ agent_ref:"refund-demo", input:{order_id:"order-42"}, budget_cap_cents:1000 }) });
+// --- step ledger list
+function renderLedger(steps) {
+  const tl = document.getElementById("timeline");
+  if (!tl) return;
+  let html = "", prevAttempt = null;
+  for (const s of steps) {
+    if (prevAttempt !== null && s.attempt !== prevAttempt)
+      html += `<div class="resume">resumed by ${esc(s.worker_id || "worker")} (attempt ${s.attempt}) — crash recovery from the ledger</div>`;
+    prevAttempt = s.attempt;
+    const color = STEP_COLOR[s.type] || "var(--line)";
+    const idem = s.idempotency_key ? `<span class="pill">idem:${esc(s.idempotency_key).slice(0, 14)}…</span>` : "";
+    html += `<div class="step ${s.seq === selectedSeq ? "sel" : ""}" data-seq="${s.seq}" style="--nc:${color}">
+      <div class="head" onclick="selectStep(${s.seq})">
+        <span class="seq">#${s.seq}</span>
+        <span class="stype" style="color:${color}">${esc(s.type)}</span>
+        <span class="pill">${esc(s.tool_call_id || "")}</span>
+        ${idem}
+        <span class="right pill">${esc(s.worker_id || "")} · a${s.attempt}</span>
+        <button class="btn ghost sm" onclick="event.stopPropagation();forkHere(${s.seq})">⑂ Fork</button>
+      </div>
+      <pre class="code" style="display:none">${esc(JSON.stringify(s.payload, null, 2))}</pre>
+    </div>`;
+  }
+  tl.innerHTML = html || '<div class="empty">no steps yet</div>';
+}
+
+function selectStep(seq) {
+  selectedSeq = seq;
+  const el = document.querySelector(`.step[data-seq="${seq}"] pre`);
+  if (el) el.style.display = el.style.display === "block" ? "none" : "block";
+  document.querySelectorAll(".step").forEach(s => s.classList.toggle("sel", +s.dataset.seq === seq));
+  renderInspector(lastSteps);
+  renderGraph(lastSteps);
+}
+function highlightStep(seq) {
+  document.querySelectorAll(".step").forEach(s => s.classList.toggle("sel", +s.dataset.seq === seq));
+  const node = document.querySelector(`.step[data-seq="${seq}"]`);
+  if (node) node.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+// --- inspector
+function renderInspector(steps) {
+  const body = document.getElementById("inspBody");
+  if (!body) return;
+  const s = steps.find(x => x.seq === selectedSeq) || steps[steps.length - 1];
+  if (!s) { body.innerHTML = '<div class="empty" style="padding:14px">select a step</div>'; return; }
+  const f = (k, v, accent) => `<div class="field"><span class="k">${k}</span><span class="v ${accent ? "accent" : ""}">${esc(v)}</span></div>`;
+  body.innerHTML =
+    f("seq", "#" + s.seq) +
+    f("type", s.type, true) +
+    f("tool_call_id", s.tool_call_id || "—") +
+    f("idempotency_key", s.idempotency_key || "—", !!s.idempotency_key) +
+    f("worker_id", s.worker_id || "—") +
+    f("attempt", s.attempt) +
+    f("cost_cents", s.cost_cents ?? 0) +
+    f("committed", s.created_at ? new Date(s.created_at).toLocaleTimeString() : "—") +
+    `<div class="field" style="display:block"><span class="k">payload</span><pre class="code" style="margin-top:8px">${esc(JSON.stringify(s.payload, null, 2))}</pre></div>`;
+}
+
+// --- live SSE stream → event feed + re-render on change
+async function streamRun(id, run) {
+  if (es) es.abort?.();
+  const ctrl = new AbortController(); es = ctrl;
+  const feed = document.getElementById("feed");
+  const pushEvent = (label, color, detail) => {
+    if (!feed) return;
+    const row = document.createElement("div");
+    row.className = "ev";
+    row.innerHTML = `<span class="d" style="background:${color};box-shadow:0 0 6px ${color}"></span> ${esc(label)} <span class="muted">${esc(detail || "")}</span><span class="t">${new Date().toLocaleTimeString()}</span>`;
+    feed.prepend(row);
+    while (feed.children.length > 30) feed.lastChild.remove();
+  };
+  if (["queued", "leased", "running", "approval_wait"].includes(run.status)) pushEvent("stream", "#2DD4A7", "attached");
+  try {
+    const resp = await fetch(`/v1/runs/${id}/stream`, { headers: H, signal: ctrl.signal });
+    const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = "";
+    while (true) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i; while ((i = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 2);
+        if (!line.startsWith("data:")) continue;
+        const ev = JSON.parse(line.slice(5).trim());
+        if (currentRunId !== id) return;
+        if (ev.event === "step") {
+          const c = STEP_COLOR[ev.type] || "#8A93AD";
+          pushEvent(ev.type === "tool_call" ? "tool_call issued" : ev.type + " committed", c, "#" + ev.seq);
+          // refresh data without tearing down the feed
+          const steps = await api(`/v1/runs/${id}/steps`); lastSteps = steps;
+          renderGraph(steps); renderLedger(steps); renderInspector(steps); renderScrubber(steps, run);
+        }
+        if (ev.event === "status") {
+          pushEvent("run " + ev.status, ev.status === "succeeded" ? "#2DD4A7" : ev.status === "failed" ? "#F0506A" : "#E5B567");
+          const r = await api(`/v1/runs/${id}`); renderRun(r, await api(`/v1/runs/${id}/steps`));
+          return;
+        }
+      }
+    }
+  } catch (e) { /* navigated away or stream closed */ }
+}
+
+// --- actions (contract unchanged) ---
+async function forkHere(seq) {
+  const res = await api(`/v1/runs/${currentRunId}/replay`, { method: "POST", body: JSON.stringify({ from_seq: Number(seq) }) });
+  selectedSeq = null;
   location.hash = `#/runs/${res.id}`;
 }
+async function decide(kind) { await api(`/v1/runs/${currentRunId}/${kind}`, { method: "POST" }); viewRun(currentRunId); }
+async function cancelRun() { await api(`/v1/runs/${currentRunId}/cancel`, { method: "POST" }); viewRun(currentRunId); }
 
-async function viewHealth() {
-  const data = await api("/v1/runs?limit=200");
-  const by = {}; data.runs.forEach(r => by[r.status]=(by[r.status]||0)+1);
-  const queued = by.queued||0;
-  app.innerHTML = `<h2>Health</h2>
-    <div class="card row">
-      <div class="kv"><b>total runs</b> ${data.runs.length}</div>
-      <div class="kv"><b>queued</b> ${queued}</div>
-      <div class="kv"><b>running</b> ${(by.running||0)+(by.leased||0)}</div>
-      <div class="kv"><b>succeeded</b> ${by.succeeded||0}</div>
-      <div class="kv"><b>failed/dead</b> ${(by.failed||0)+(by.dead||0)}</div>
+// ---------------------------------------------------------------------------
+// Replay & fork landing view
+// ---------------------------------------------------------------------------
+async function viewReplay() {
+  const data = await api("/v1/runs?limit=100");
+  const forked = data.runs.filter(r => r.forked_from);
+  const rows = forked.map(r => `
+    <tr class="run ${r.status}" onclick="location.hash='#/runs/${r.id}'">
+      <td class="id">${r.id.slice(0, 8)}</td>
+      <td class="mono-sm">⑂ from <span class="id">${r.forked_from.slice(0, 8)}</span> @${r.fork_seq}</td>
+      <td>${badge(r.status)}</td>
+      <td class="mono-sm">${new Date(r.created_at).toLocaleTimeString()}</td>
+    </tr>`).join("");
+  app.innerHTML = `
+    <h2 class="title">Replay &amp; fork</h2>
+    <p class="sub">Open any run, then <b>⑂ Fork</b> from a ledger step to branch a new execution dimension from that prefix — without re-calling the model or re-running prior tools.</p>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table><thead><tr><th>id</th><th>forked from</th><th>status</th><th>created</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" class="empty">no forks yet — open a run and use ⑂ Fork on a step</td></tr>'}</tbody></table>
     </div>`;
 }
 
+// ---------------------------------------------------------------------------
+// Crash demo
+// ---------------------------------------------------------------------------
+async function viewDemo() {
+  let runs = [];
+  try { runs = (await api("/v1/runs?limit=100")).runs.filter(r => r.agent_ref === "refund-demo"); } catch (e) {}
+  const resumed = runs.find(r => r.attempt >= 2);
+  const rows = runs.slice(0, 8).map(r => `
+    <tr class="run ${r.status}" onclick="location.hash='#/runs/${r.id}'">
+      <td class="id">${r.id.slice(0, 8)}</td>
+      <td>${badge(r.status)}</td>
+      <td class="mono-sm">${r.attempt}${r.attempt >= 2 ? ' <span class="badge b-approval_wait">crash-resumed</span>' : ""}</td>
+      <td class="mono-sm">$${(r.budget_used_cents / 100).toFixed(2)}</td>
+    </tr>`).join("");
+  app.innerHTML = `
+    <h2 class="title">Crash-safe refund — the killer demo</h2>
+    <p class="sub">"Crashed mid-refund. Restarted. The refund wasn't issued twice."</p>
+    <div class="card" style="margin-bottom:16px">
+      <b>What happens</b>
+      <ol class="muted" style="line-height:1.9;font-size:13.5px">
+        <li>An agent runs <code class="mono">lookup_order → issue_refund → email_customer</code>.</li>
+        <li>A worker is killed <b>after <code class="mono">issue_refund</code> dispatches</b> but <b>before its observation commits</b>.</li>
+        <li>A fresh worker re-leases, rebuilds state from the ledger, and re-dispatches with the <b>same idempotency key</b>.</li>
+        <li>The downstream dedupes: <b>dispatch attempts may repeat, effects cannot duplicate</b>.</li>
+      </ol>
+    </div>
+    <div class="flex" style="margin-bottom:16px">
+      <div class="demo-stat"><div class="n">2</div><div class="muted mono-sm">dispatch attempts</div></div>
+      <div class="demo-stat ok"><div class="n">1</div><div class="muted mono-sm">tool effect</div></div>
+      <div class="demo-stat"><div class="n">▸</div><div class="muted mono-sm">resume marker</div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <b>Run it</b>
+      <p class="muted" style="font-size:13.5px">From a terminal (a real worker is killed with <code class="mono">SIGKILL</code>):</p>
+      <pre class="code">python -m avatar.cli demo</pre>
+      <p class="muted" style="font-size:13.5px;margin-top:10px">…then open the run to see the <span style="color:var(--warn)">▸ resumed</span> marker. Or enqueue a plain run here:</p>
+      <button class="btn sm" onclick="launchDemo()">Enqueue a refund-demo run</button>
+    </div>
+    <div class="panel-h"><h3>Recent refund-demo runs</h3>${resumed ? '<span class="badge b-succeeded">crash-resumed run present ✓</span>' : ""}</div>
+    <div class="card" style="padding:0;overflow:hidden"><table>
+      <thead><tr><th>id</th><th>status</th><th>attempt</th><th>cost</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" class="empty">none yet — run <code class="mono">avatar demo</code> or click above</td></tr>'}</tbody>
+    </table></div>`;
+}
+async function launchDemo() {
+  const res = await api("/v1/runs", { method: "POST", body: JSON.stringify({ agent_ref: "refund-demo", input: { order_id: "order-42" }, budget_cap_cents: 1000 }) });
+  selectedSeq = null;
+  location.hash = `#/runs/${res.id}`;
+}
+
+// ---------------------------------------------------------------------------
+// Health
+// ---------------------------------------------------------------------------
+async function viewHealth() {
+  const s = await api("/v1/stats");
+  const by = s.by_status || {};
+  app.innerHTML = `
+    <h2 class="title">Fleet health</h2>
+    <p class="sub">Operational snapshot read directly off Postgres.</p>
+    <div class="stats">
+      <div class="stat"><div class="n">${Object.values(by).reduce((a, b) => a + b, 0)}</div><div class="c">total runs</div></div>
+      <div class="stat"><div class="n">${s.queue_depth || 0}</div><div class="c">queue depth</div></div>
+      <div class="stat ok"><div class="n">${s.running || 0}</div><div class="c">running</div></div>
+      <div class="stat ok"><div class="n">${by.succeeded || 0}</div><div class="c">succeeded</div></div>
+      <div class="stat bad"><div class="n">${(by.failed || 0) + (by.dead || 0)}</div><div class="c">failed / dead</div></div>
+      <div class="stat"><div class="n">${s.oldest_queued_age_seconds || 0}s</div><div class="c">oldest queued age</div></div>
+    </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Router
+// ---------------------------------------------------------------------------
 function route() {
-  setActive();
+  setActiveNav();
   const h = location.hash || "#/";
-  if (h.startsWith("#/runs/")) viewRun(h.slice(7));
+  if (h.startsWith("#/runs/")) { viewRun(h.slice(7)); return; }
+  selectedSeq = null;
+  if (h === "#/active") viewRuns("active");
+  else if (h === "#/failed") viewRuns("failed");
+  else if (h === "#/approvals") viewRuns("approvals");
+  else if (h === "#/replay") viewReplay();
   else if (h === "#/demo") viewDemo();
   else if (h === "#/health") viewHealth();
   else viewRuns();
 }
 window.addEventListener("hashchange", route);
-document.querySelectorAll(".navlink").forEach(a => a.onclick = () => location.hash = a.dataset.route);
 route();
-setInterval(() => { if ((location.hash||"#/") === "#/") viewRuns().catch(()=>{}); }, 2500);
+refreshCounts();
+setInterval(refreshCounts, 4000);
+setInterval(() => { const h = location.hash || "#/"; if (!h.startsWith("#/runs/")) route(); }, 3000);
 </script>
 </body>
 </html>
